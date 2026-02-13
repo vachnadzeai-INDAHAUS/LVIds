@@ -1,0 +1,90 @@
+{
+  "name": "trae-project",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently \"tsx api/server.ts\" \"vite\"",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "build:python": "pyinstaller --onefile --name generator --distpath api/bin --workpath api/build --specpath api --collect-all imageio --copy-metadata imageio --hidden-import imageio api/generator/generator.py",
+    "build:api": "tsup api/server.ts --format cjs --out-dir dist-api",
+    "electron:dev": "concurrently -k \"cross-env BROWSER=none npm run dev\" \"wait-on http://localhost:5174 && electron .\"",
+    "electron:pack": "npm run build && npm run build:api && npm run build:python && electron-builder"
+  },
+  "build": {
+    "appId": "com.lumina.vids",
+    "productName": "Lumina Vids",
+    "directories": {
+      "output": "release-v2"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-api/**/*",
+      "electron/**/*",
+      "api/bin/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+        {
+            "from": "api/bin/generator.exe",
+            "to": "bin/generator.exe"
+        }
+    ],
+    "win": {
+      "target": "dir",
+      "icon": "public/favicon.ico"
+    }
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "clsx": "^2.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^4.21.2",
+    "lucide-react": "^0.511.0",
+    "multer": "^2.0.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.3.0",
+    "tailwind-merge": "^3.0.2",
+    "uuid": "^13.0.0",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.0",
+    "@types/archiver": "^7.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.21",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^22.15.30",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/uuid": "^10.0.0",
+    "@vercel/node": "^5.3.6",
+    "@vitejs/plugin-react": "^4.4.1",
+    "autoprefixer": "^10.4.21",
+    "babel-plugin-react-dev-locator": "^1.0.0",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^40.3.0",
+    "electron-builder": "^26.7.0",
+    "eslint": "^9.25.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.19",
+    "globals": "^16.0.0",
+    "nodemon": "^3.1.10",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "tsup": "^8.5.1",
+    "tsx": "^4.20.3",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.30.1",
+    "vite": "^6.3.5",
+    "vite-plugin-trae-solo-badge": "^1.0.0",
+    "vite-tsconfig-paths": "^5.1.4",
+    "wait-on": "^9.0.3"
+  }
+}
