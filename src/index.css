@@ -3,31 +3,177 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* ჩვენი ფერების სქემა */
+    --color-primary: #F97316;
+    --color-primary-light: #FB923C;
+    --color-primary-dark: #EA580C;
+    --color-surface: #1F2937;
+    --color-surface-light: #374151;
+    --color-surface-dark: #111827;
+    --color-text-primary: #F3F4F6;
+    --color-text-secondary: #9CA3AF;
+    --color-text-muted: #6B7280;
+  }
+
   body {
-    @apply bg-[#0B0F17] text-[#E5E7EB] antialiased;
+    @apply bg-surface-dark text-text-primary antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-surface;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-light rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-text-muted;
+  }
+
+  /* Selection styling */
+  ::selection {
+    @apply bg-primary/30 text-text-primary;
   }
 }
 
 @layer components {
+  /* ღილაკები */
   .btn {
-    @apply px-4 py-2 rounded font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#0B0F17];
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 
+           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface-dark
+           disabled:opacity-50 disabled:cursor-not-allowed;
   }
+  
   .btn-primary {
-    @apply bg-[#3B82F6] text-white hover:brightness-110 focus:ring-[#3B82F6];
+    @apply bg-primary text-white hover:bg-primary-light focus:ring-primary;
   }
+  
   .btn-secondary {
-    @apply bg-[#111827] border border-[#243042] text-[#E5E7EB] hover:brightness-110 focus:ring-[#243042];
+    @apply bg-surface border border-surface-light text-text-primary 
+           hover:border-primary hover:text-primary focus:ring-surface-light;
   }
+  
   .btn-danger {
-    @apply bg-[#EF4444] text-white hover:brightness-110 focus:ring-[#EF4444];
+    @apply bg-red-500 text-white hover:bg-red-400 focus:ring-red-500;
   }
+
+  /* კარდი */
   .card {
-    @apply bg-[#111827] border border-[#243042] rounded-lg p-6;
+    @apply bg-surface border border-surface-light rounded-xl p-6 
+           shadow-lg shadow-black/10;
   }
+
+  /* ინპუტი */
   .input {
-    @apply w-full bg-[#0B0F17] border border-[#243042] rounded px-3 py-2 text-[#E5E7EB] focus:border-[#3B82F6] focus:ring-1 focus:ring-[#3B82F6] outline-none transition-colors;
+    @apply w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 
+           text-text-primary placeholder-text-muted 
+           focus:border-primary focus:ring-1 focus:ring-primary outline-none 
+           transition-colors;
   }
+
+  /* ლეიბლი */
   .label {
-    @apply block text-sm font-medium text-[#9CA3AF] mb-1;
+    @apply block text-sm font-medium text-text-secondary mb-1;
   }
+
+  /* ტრანზიციის ეფექტები */
+  .transition-preview {
+    @apply relative overflow-hidden;
+  }
+
+  .transition-preview::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-r from-primary/20 to-transparent;
+  }
+}
+
+@layer utilities {
+  /* ანიმაციები */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+  
+  .animate-slide-up {
+    animation: slideUp 0.4s ease-out;
+  }
+  
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  /* გადასვლის ეფექტების კლასები */
+  .transition-fade {
+    @apply transition-opacity duration-300;
+  }
+  
+  .transition-slide {
+    @apply transition-transform duration-300;
+  }
+  
+  .transition-zoom {
+    @apply transition-transform duration-300;
+  }
+}
+
+/* Custom animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { 
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from { 
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to { 
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Range input styling */
+input[type="range"] {
+  @apply appearance-none bg-surface-light rounded-full h-2 outline-none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  @apply appearance-none w-4 h-4 bg-primary rounded-full cursor-pointer 
+         hover:bg-primary-light transition-colors;
+}
+
+input[type="range"]::-moz-range-thumb {
+  @apply w-4 h-4 bg-primary rounded-full cursor-pointer border-0;
+}
+
+/* Focus styles */
+*:focus-visible {
+  @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-surface-dark;
+}
+
+/* Loading spinner */
+.spinner {
+  @apply animate-spin rounded-full border-2 border-surface-light border-t-primary;
+}
+
+/* Glass effect */
+.glass {
+  @apply bg-surface/80 backdrop-blur-lg border border-surface-light;
 }

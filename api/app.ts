@@ -11,6 +11,15 @@ const app = express();
 
 // Basic Middleware
 app.use(cors());
+// app.use(express.json()); // Moved down
+
+// Debug middleware
+app.use((req, res, next) => {
+    console.log(`[${req.method}] ${req.url}`);
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    next();
+});
+
 app.use(express.json());
 
 // Paths
@@ -24,11 +33,13 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     // We attach jobId to req in the middleware before upload
     const jobId = (req as any).jobId;
+    console.log(`[Multer] Uploading file ${file.originalname} for job ${jobId}`);
     const jobDir = path.join(UPLOADS_DIR, jobId);
     if (!fs.existsSync(jobDir)) fs.mkdirSync(jobDir, { recursive: true });
     cb(null, jobDir);
   },
   filename: (req, file, cb) => {
+    console.log(`[Multer] Saving file ${file.originalname}`);
     cb(null, file.originalname);
   }
 });
@@ -127,13 +138,18 @@ async function processQueue() {
     } else {
         // Fallback to python script
         console.log("Using python script");
-        cmd = isWin ? 'python' : 'python3';
-        // Need to ensure script path is correct in packaged app
-        // In packaged app, __dirname is inside asar, but we might need to extract it or just use python if installed
-        // But usually we rely on bundled exe in prod.
+        
+        // Use full Python path on Windows
+        const pythonPath = isWin 
+            ? 'C:\\Users\\User\\AppData\\Local\\Programs\\Python\\Python311\\python.exe'
+            : 'python3';
         
         // If we are here in prod, it means generator.exe is missing!
         console.error("CRITICAL: Generator executable not found!");
+        console.log("Job images:", job.images);
+        console.log("Job images count:", job.images.length);
+        
+        // Fix: pass images as comma-separated or ensure proper array spreading
         args = [
             scriptPath,
             '--images', ...job.images,
@@ -141,6 +157,7 @@ async function processQueue() {
             '--output', job.outputDir,
             '--settings', JSON.stringify(job.settings)
         ];
+        cmd = pythonPath;
     }
 
     console.log(`Executing: ${cmd} ${args.length > 5 ? args.slice(0, 5).join(' ') + ' ...' : args.join(' ')}`);
@@ -264,15 +281,20 @@ app.post('/api/generate', (req, res, next) => {
         const jobId = (req as any).jobId;
         const propertyId = req.body.propertyId || 'prop';
         const settings = JSON.parse(req.body.settings || '{}');
+        const textOverlay = JSON.parse(req.body.textOverlay || '{}');
         
         const files = (req.files as any)['images'] ? (req.files as any)['images'].map((f: any) => f.path) : [];
         const musicFile = (req.files as any)['music'] ? (req.files as any)['music'][0].path : undefined;
+        
+        console.log("Uploaded files:", req.files);
+        console.log("Image files:", files);
+        console.log("Image count:", files.length);
 
         const job: Job = {
             id: jobId,
             status: 'queued',
             images: files,
-            settings: { ...settings, musicFile },
+            settings: { ...settings, musicFile, textOverlay },
             propertyId,
             createdAt: Date.now(),
             outputDir: path.join(OUTPUTS_DIR, jobId)

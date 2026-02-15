@@ -53,11 +53,12 @@ const Layout: React.FC = () => {
               <Globe size={16} className="text-[#9CA3AF]" />
               <select
                 value={language}
-                onChange={(e) => setLanguage(e.target.value as 'en' | 'ka')}
+                onChange={(e) => setLanguage(e.target.value as 'en' | 'ka' | 'ru')}
                 className="bg-[#1F2937] text-sm text-[#E5E7EB] border border-[#374151] rounded px-2 py-1 focus:outline-none focus:border-[#3B82F6]"
               >
                 <option value="en">English</option>
                 <option value="ka">ქართული</option>
+                <option value="ru">Русский</option>
               </select>
             </div>
           </div>
