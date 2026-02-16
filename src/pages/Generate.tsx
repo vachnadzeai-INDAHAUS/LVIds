@@ -737,16 +737,16 @@ const Generate: React.FC = () => {
                     }`}
                   >
                     {/* Header: Logo Image + Name + Toggle */}
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center">
-                        <div className="w-10 h-10 rounded-lg mr-3 overflow-hidden border-2 border-surface-light shadow-lg bg-white">
+                        <div className="w-14 h-14 rounded-xl mr-4 overflow-hidden border-3 border-primary/50 shadow-2xl bg-white ring-2 ring-white/20">
                           <img 
                             src={`/src/assets/logo-${platform.id}.jpg`}
                             alt={platform.name}
                             className="w-full h-full object-cover"
                           />
                         </div>
-                        <div className="text-sm font-medium text-text-primary">{platform.name}</div>
+                        <div className="text-base font-bold text-text-primary">{platform.name}</div>
                       </div>
                       {/* Toggle Switch */}
                       <button
