@@ -247,31 +247,51 @@ def add_platform_label(clip, platform_name, width, height):
     platforms = [p.strip() for p in platform_name.split('+')]
     logo_clips = []
     
+    # Try multiple possible paths
+    possible_base_paths = [
+        os.path.join(os.path.dirname(__file__), '..', '..'),  # From api/generator/generator.py
+        os.path.join(os.path.dirname(__file__), '..'),  # From api/generator/
+        os.getcwd(),  # Current working directory
+        os.path.join(os.getcwd(), 'src'),  # src folder
+        os.path.join(os.getcwd(), 'public'),  # public folder
+    ]
+    
     for platform in platforms:
         logo_file = platform_to_logo.get(platform)
         if not logo_file:
+            print(f"DEBUG: Unknown platform: {platform}")
             continue
-            
-        logo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'src', 'assets', logo_file)
-        if not os.path.exists(logo_path):
-            logo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'public', logo_file)
         
-        if not os.path.exists(logo_path):
-            print(f"DEBUG: Logo not found at {logo_path}")
+        # Try to find logo file
+        logo_path = None
+        for base_path in possible_base_paths:
+            for subdir in ['assets', 'public', '']:
+                test_path = os.path.join(base_path, subdir, logo_file) if subdir else os.path.join(base_path, logo_file)
+                print(f"DEBUG: Checking path: {test_path}")
+                if os.path.exists(test_path):
+                    logo_path = test_path
+                    print(f"DEBUG: Found logo at: {logo_path}")
+                    break
+            if logo_path:
+                break
+        
+        if not logo_path:
+            print(f"DEBUG: Logo file {logo_file} not found in any location")
             continue
         
         try:
             # Logo size: 8% of video width
             logo_width = int(width * 0.08)
-            logo_height = int(logo_width)  # Square logos
             
             logo_clip = ImageClip(logo_path).set_duration(clip.duration)
-            logo_clip = logo_clip.resize((logo_width, logo_height))
+            logo_clip = logo_clip.resize(width=logo_width)
             
             logo_clips.append(logo_clip)
             print(f"DEBUG: Added logo for {platform}")
         except Exception as e:
             print(f"DEBUG: Error loading logo for {platform}: {e}")
+            import traceback
+            traceback.print_exc()
     
     if not logo_clips:
         print("DEBUG: No logos to add")
@@ -298,6 +318,8 @@ def add_platform_label(clip, platform_name, width, height):
         return final
     except Exception as e:
         print(f"Warning: Could not add platform logo: {e}")
+        import traceback
+        traceback.print_exc()
         return clip
 
 def generate_format(fmt_key, dimensions, images, temp_base, property_id, output_dir, settings, platform_name=None):
