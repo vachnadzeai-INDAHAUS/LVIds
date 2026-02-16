@@ -1,0 +1,33 @@
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#EA580C" />
+      <stop offset="100%" stop-color="#FDBA74" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Ribbon Logo Shape -->
+  <path 
+    d="M30,80 L80,80 L90,70 L40,70 Q30,70 30,60 L30,30 Q30,10 50,10 Q70,10 70,30 L60,30 Q60,20 50,20 Q40,20 40,30 L40,60 Q40,80 60,80" 
+    fill="url(#logoGradient)" 
+    filter="url(#glow)"
+    transform="rotate(-10 50 50)"
+  />
+  
+  <!-- Glossy Highlight -->
+  <path 
+    d="M35,30 Q35,15 50,15 Q65,15 65,30" 
+    fill="none" 
+    stroke="rgba(255,255,255,0.4)" 
+    stroke-width="2" 
+    stroke-linecap="round"
+    transform="rotate(-10 50 50)"
+  />
+</svg>

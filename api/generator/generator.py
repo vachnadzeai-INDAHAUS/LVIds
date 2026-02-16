@@ -163,6 +163,7 @@ def create_text_overlay(clip, textOverlay, width, height):
         )
         if title_clip:
             title_clip = title_clip.set_duration(clip.duration)
+            # Ensure text clip position is relative to video size, not cropped
             text_clips.append(title_clip)
             current_y += 70 # Approximate height + padding
     
@@ -183,7 +184,7 @@ def create_text_overlay(clip, textOverlay, width, height):
             current_y += 90 # Approximate height + padding
     
     if phone:
-        phone_text = f"📞 {phone}"
+        phone_text = f" {phone}"
         phone_clip = create_pil_text_clip(
             phone_text, 
             fontsize=40, 
@@ -215,9 +216,11 @@ def create_text_overlay(clip, textOverlay, width, height):
             logo_clip = logo_clip.set_position((width - 200, 30)).set_duration(clip.duration)
             text_clips.append(logo_clip)
     
-    # Composite all clips
     if text_clips:
-        return CompositeVideoClip([clip] + text_clips, size=(width, height))
+        # Create a new composite clip where text overlays are added
+        # Important: set_duration must be called on the composite clip
+        final = CompositeVideoClip([clip] + text_clips, size=(width, height)).set_duration(clip.duration)
+        return final
     
     return clip
 
@@ -354,7 +357,9 @@ def generate_format(fmt_key, dimensions, images, temp_base, property_id, output_
         final_clip = concatenate_videoclips(final_clips_sequence, method="compose")
     
     # 4. Add Text Overlay (if enabled)
-    final_clip = create_text_overlay(final_clip, text_overlay, w, h)
+    # Apply text overlay to the final concatenated clip instead of individual clips
+    # This ensures text stays on top of transitions
+    final_clip_with_text = create_text_overlay(final_clip, text_overlay, w, h)
     
     # 5. Add Music (if provided)
     if music_file and os.path.exists(music_file):
@@ -363,13 +368,13 @@ def generate_format(fmt_key, dimensions, images, temp_base, property_id, output_
             if music_volume != 1.0:
                 audio = audio.volumex(music_volume)
             
-            video_duration = final_clip.duration
+            video_duration = final_clip_with_text.duration
             if audio.duration < video_duration:
-                audio = audio.audio_loop(duration=video_duration)
+                audio = audio.loop(duration=video_duration)
             else:
                 audio = audio.subclip(0, video_duration)
                 
-            final_clip = final_clip.set_audio(audio)
+            final_clip_with_text = final_clip_with_text.set_audio(audio)
         except Exception as e:
             print(f"Warning: Failed to add music: {e}")
 
@@ -378,7 +383,7 @@ def generate_format(fmt_key, dimensions, images, temp_base, property_id, output_
     out_path = os.path.join(output_dir, out_filename)
     
     try:
-        final_clip.write_videofile(
+        final_clip_with_text.write_videofile(
             out_path, 
             fps=fps, 
             codec="libx264", 

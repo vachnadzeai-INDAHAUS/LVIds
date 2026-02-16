@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Video, List, HelpCircle, Globe } from 'lucide-react';
+import { Video, Menu, HelpCircle, Globe } from 'lucide-react';
 import { useLanguage } from '../../i18n/LanguageContext';
 
 const Layout: React.FC = () => {
@@ -9,52 +9,70 @@ const Layout: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 h-16 bg-[#111827] border-b border-[#243042] z-50 flex items-center px-6">
-        <div className="max-w-7xl w-full mx-auto flex justify-between items-center">
-          <div className="flex items-center space-x-2 text-[#3B82F6]">
-            <Video size={24} />
-            <span className="text-xl font-bold tracking-tight text-white">{t('nav.brand')}</span>
+      <header className="fixed top-0 left-0 right-0 h-16 bg-[#1F2937] border-b border-[#374151] z-50 flex items-center px-4">
+        <div className="w-full flex justify-between items-center">
+          {/* Left: Logo (BIGGER as requested) */}
+          <div className="flex items-center space-x-4">
+            <div className="w-16 h-16 relative flex items-center justify-center">
+               <img
+                 src="/src/assets/logo.jpg"
+                 alt="Lumina Vids Logo"
+                 className="w-full h-full object-contain drop-shadow-lg"
+                 onError={(e) => {
+                   if (e.currentTarget.src.endsWith('/src/assets/logo.jpg')) {
+                     e.currentTarget.src = '/src/assets/logo.png';
+                     return;
+                   }
+                   e.currentTarget.src = '/src/assets/logo.svg';
+                 }}
+               />
+            </div>
+            <div className="flex flex-col leading-none">
+              <span className="text-lg font-black tracking-widest text-[#FF8A1F] drop-shadow-md font-['Oswald']">LUMINA</span>
+              <span className="text-lg font-black tracking-widest text-[#FF8A1F] drop-shadow-md font-['Oswald']">VIDS</span>
+            </div>
           </div>
           
-          <div className="flex items-center space-x-6">
-            <nav className="flex space-x-6">
+          {/* Right: Navigation (Shifted to the right side as requested) */}
+          <div className="flex items-center space-x-8 pr-4">
+            <nav className="flex space-x-8">
               <NavLink 
                 to="/" 
                 className={({ isActive }) => 
-                  `flex items-center space-x-2 text-sm font-medium transition-colors ${isActive ? 'text-[#3B82F6]' : 'text-[#9CA3AF] hover:text-[#E5E7EB]'}`
+                  `flex items-center space-x-2 text-sm font-medium transition-all hover:scale-105 text-[#FF8A1F] ${isActive ? 'drop-shadow-sm font-bold' : ''}`
                 }
               >
-                <Video size={18} />
-                <span>{t('nav.generate')}</span>
+                <Video size={18} className="text-[#FF8A1F]" />
+                <span className="text-[#FF8A1F]">{t('nav.generate')}</span>
               </NavLink>
               <NavLink 
                 to="/outputs" 
                 className={({ isActive }) => 
-                  `flex items-center space-x-2 text-sm font-medium transition-colors ${isActive ? 'text-[#3B82F6]' : 'text-[#9CA3AF] hover:text-[#E5E7EB]'}`
+                  `flex items-center space-x-2 text-sm font-medium transition-all hover:scale-105 text-[#FF8A1F] ${isActive ? 'drop-shadow-sm font-bold' : ''}`
                 }
               >
-                <List size={18} />
-                <span>{t('nav.outputs')}</span>
+                <Menu size={18} className="text-[#FF8A1F]" />
+                <span className="text-[#FF8A1F]">{t('nav.outputs')}</span>
               </NavLink>
               <NavLink 
                 to="/help" 
                 className={({ isActive }) => 
-                  `flex items-center space-x-2 text-sm font-medium transition-colors ${isActive ? 'text-[#3B82F6]' : 'text-[#9CA3AF] hover:text-[#E5E7EB]'}`
+                  `flex items-center space-x-2 text-sm font-medium transition-all hover:scale-105 text-[#FF8A1F] ${isActive ? 'drop-shadow-sm font-bold' : ''}`
                 }
               >
-                <HelpCircle size={18} />
-                <span>{t('nav.help')}</span>
+                <HelpCircle size={18} className="text-[#FF8A1F]" />
+                <span className="text-[#FF8A1F]">{t('nav.help')}</span>
               </NavLink>
             </nav>
 
             <div className="h-6 w-px bg-[#243042]" />
 
-            <div className="flex items-center space-x-2">
-              <Globe size={16} className="text-[#9CA3AF]" />
+            <div className="flex items-center space-x-2 text-[#FF8A1F] transition-colors">
+              <Globe size={16} />
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as 'en' | 'ka' | 'ru')}
-                className="bg-[#1F2937] text-sm text-[#E5E7EB] border border-[#374151] rounded px-2 py-1 focus:outline-none focus:border-[#3B82F6]"
+                className="bg-[#1F2937] text-sm text-[#FF8A1F] border border-[#374151] rounded px-2 py-1 focus:outline-none focus:border-[#FF8A1F] hover:border-[#FF8A1F]/50 transition-colors cursor-pointer"
               >
                 <option value="en">English</option>
                 <option value="ka">ქართული</option>

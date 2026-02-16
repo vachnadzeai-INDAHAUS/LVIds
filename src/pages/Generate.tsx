@@ -152,6 +152,21 @@ const Generate: React.FC = () => {
       setSelectedPlatform(null);
     } else {
       setSelectedPlatform(id);
+      // Auto-configure settings based on platform
+      switch(id) {
+        case 'tiktok':
+          setSettings({...settings, fps: 30, secondsPerImage: 2.5}); // Short, punchy
+          break;
+        case 'instagram':
+          setSettings({...settings, fps: 30, secondsPerImage: 3}); // Standard
+          break;
+        case 'facebook':
+          setSettings({...settings, fps: 30, secondsPerImage: 3.5}); // Slightly longer
+          break;
+        case 'youtube':
+          setSettings({...settings, fps: 60, secondsPerImage: 4}); // Higher quality
+          break;
+      }
     }
   };
 
@@ -620,12 +635,12 @@ const Generate: React.FC = () => {
               const file = resultFiles.find(f => f.includes(fmt));
               
               return (
-                <div key={fmt} className="bg-surface border border-surface-light rounded-xl p-4 flex flex-col h-[200px]">
+                <div key={fmt} className="bg-surface border border-surface-light rounded-xl p-4 flex flex-col h-[450px]">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs font-bold text-text-muted bg-surface-dark px-2 py-1 rounded">{fmt}</span>
                     <span className="text-xs text-text-secondary">{isDone ? '✓' : `${pct}%`}</span>
                   </div>
-                  <div className="flex-1 flex items-center justify-center bg-surface-dark rounded-lg overflow-hidden mb-3">
+                  <div className="flex-1 flex items-center justify-center bg-surface-dark rounded-lg overflow-hidden mb-3 relative">
                     {isDone && file ? (
                       <video controls className="w-full h-full object-contain" src={`/api/jobs/${jobId}/download/${file}`} />
                     ) : (
