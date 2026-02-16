@@ -83,6 +83,8 @@ const Generate: React.FC = () => {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [draggedItem, setDraggedItem] = useState<number | null>(null);
   const [hoveredTransition, setHoveredTransition] = useState<string | null>(null);
+  const [previewTransition, setPreviewTransition] = useState<string>('fade');
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState<boolean>(false);
   const [settings, setSettings] = useState<JobSettings>({
     fps: 30,
     secondsPerImage: 3.2,
@@ -805,19 +807,73 @@ const Generate: React.FC = () => {
               </div>
             </div>
 
-            {/* Transitions with Hover Preview */}
+            {/* Transitions with Visual Preview */}
             <div className="mb-6 border-b border-surface-light pb-6">
               <div className="flex items-center justify-between mb-3">
                 <label className="block text-sm font-medium text-text-secondary">
                   {t('generate.transition')}
                 </label>
-                {/* Hover Preview Box */}
-                {hoveredTransition && (
-                  <div className="flex items-center space-x-2 text-xs text-primary animate-pulse">
-                    <span>👁️ ნახავ:</span>
-                    <span className="font-bold">{t(`generate.transition_${hoveredTransition}`)}</span>
+              </div>
+              
+              {/* VISUAL PREVIEW BOX - Shows actual transition */}
+              <div className="mb-4 bg-surface-dark rounded-xl p-4 border border-surface-light">
+                <div className="text-xs text-text-secondary mb-2 text-center">
+                  Preview: {hoveredTransition ? t(`generate.transition_${hoveredTransition}`) : t(`generate.transition_${settings.transition}`)}
+                </div>
+                <div className="relative w-full h-32 bg-surface rounded-lg overflow-hidden flex items-center justify-center">
+                  {/* Image 1 (Background) */}
+                  <div 
+                    className={`absolute inset-4 bg-gradient-to-br from-primary/30 to-primary/10 rounded-lg flex items-center justify-center transition-all duration-700 ease-in-out ${
+                      hoveredTransition === 'fade' ? 'opacity-0' :
+                      hoveredTransition === 'slide_left' ? '-translate-x-full opacity-0' :
+                      hoveredTransition === 'slide_right' ? 'translate-x-full opacity-0' :
+                      hoveredTransition === 'slide_up' ? '-translate-y-full opacity-0' :
+                      hoveredTransition === 'slide_down' ? 'translate-y-full opacity-0' :
+                      hoveredTransition === 'zoom_in' ? 'scale-150 opacity-0' :
+                      hoveredTransition === 'zoom_out' ? 'scale-50 opacity-0' :
+                      hoveredTransition === 'wipe_left' ? '-translate-x-full' :
+                      hoveredTransition === 'wipe_right' ? 'translate-x-full' :
+                      hoveredTransition === 'wipe_up' ? '-translate-y-full' :
+                      hoveredTransition === 'wipe_down' ? 'translate-y-full' :
+                      hoveredTransition === 'spin_in' ? 'rotate-180 opacity-0' :
+                      hoveredTransition === 'spin_out' ? '-rotate-180 opacity-0' :
+                      hoveredTransition ? 'opacity-50' : 'opacity-100'
+                    }`}
+                  >
+                    <span className="text-4xl">🖼️</span>
+                    <span className="absolute bottom-2 text-xs text-text-secondary">Image 1</span>
                   </div>
-                )}
+                  
+                  {/* Image 2 (Foreground) */}
+                  <div 
+                    className={`absolute inset-4 bg-gradient-to-br from-primary to-primary/60 rounded-lg flex items-center justify-center transition-all duration-700 ease-in-out ${
+                      hoveredTransition === 'fade' ? 'opacity-100' :
+                      hoveredTransition === 'slide_left' ? 'translate-x-0' :
+                      hoveredTransition === 'slide_right' ? 'translate-x-0' :
+                      hoveredTransition === 'slide_up' ? 'translate-y-0' :
+                      hoveredTransition === 'slide_down' ? 'translate-y-0' :
+                      hoveredTransition === 'zoom_in' ? 'scale-100' :
+                      hoveredTransition === 'zoom_out' ? 'scale-100' :
+                      hoveredTransition === 'wipe_left' ? 'translate-x-0' :
+                      hoveredTransition === 'wipe_right' ? 'translate-x-0' :
+                      hoveredTransition === 'wipe_up' ? 'translate-y-0' :
+                      hoveredTransition === 'wipe_down' ? 'translate-y-0' :
+                      hoveredTransition === 'spin_in' ? 'rotate-0 opacity-100' :
+                      hoveredTransition === 'spin_out' ? 'rotate-0 opacity-100' :
+                      hoveredTransition ? 'opacity-100' : 'opacity-0'
+                    }`}
+                  >
+                    <span className="text-4xl">🎬</span>
+                    <span className="absolute bottom-2 text-xs text-white font-bold">Image 2</span>
+                  </div>
+                  
+                  {/* Transition Icon Overlay */}
+                  {hoveredTransition && (
+                    <div className="absolute top-2 right-2 bg-primary text-white px-2 py-1 rounded text-xs font-bold animate-pulse">
+                      {TRANSITIONS.find(t => t.value === hoveredTransition)?.icon}
+                    </div>
+                  )}
+                </div>
               </div>
               
               {/* Basic Switches */}
