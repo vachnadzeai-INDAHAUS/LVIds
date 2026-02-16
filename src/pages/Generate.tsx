@@ -736,14 +736,15 @@ const Generate: React.FC = () => {
                         : 'bg-surface-dark/50 border-surface-light'
                     }`}
                   >
-                    {/* Header: Icon + Name + Toggle */}
+                    {/* Header: Logo Image + Name + Toggle */}
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center">
-                        <div 
-                          className="w-8 h-8 rounded-full flex items-center justify-center mr-3"
-                          style={{ backgroundColor: platform.color }}
-                        >
-                          <platform.icon size={16} className="text-white" />
+                        <div className="w-10 h-10 rounded-lg mr-3 overflow-hidden shadow-md bg-white">
+                          <img 
+                            src={`/src/assets/logo-${platform.id}.jpg`}
+                            alt={platform.name}
+                            className="w-full h-full object-cover"
+                          />
                         </div>
                         <div className="text-sm font-medium text-text-primary">{platform.name}</div>
                       </div>
