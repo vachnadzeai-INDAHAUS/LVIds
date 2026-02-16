@@ -224,7 +224,41 @@ def create_text_overlay(clip, textOverlay, width, height):
     
     return clip
 
-def generate_format(fmt_key, dimensions, images, temp_base, property_id, output_dir, settings):
+def add_platform_label(clip, platform_name, width, height):
+    """Add platform label at top of video"""
+    from moviepy.editor import TextClip
+    
+    if not platform_name:
+        return clip
+    
+    # Create text label
+    label_text = platform_name.upper()
+    
+    # Calculate font size based on video height
+    font_size = int(height * 0.05)  # 5% of video height
+    
+    try:
+        txt_clip = TextClip(
+            label_text,
+            fontsize=font_size,
+            color='white',
+            font='Arial-Bold',
+            stroke_color='black',
+            stroke_width=2,
+            method='caption'
+        ).set_duration(clip.duration)
+        
+        # Position at top center
+        txt_clip = txt_clip.set_position(('center', height * 0.02))
+        
+        # Composite with original clip
+        final = CompositeVideoClip([clip, txt_clip], size=(width, height))
+        return final
+    except Exception as e:
+        print(f"Warning: Could not add platform label: {e}")
+        return clip
+
+def generate_format(fmt_key, dimensions, images, temp_base, property_id, output_dir, settings, platform_name=None):
     w, h = dimensions
     fps = int(settings.get("fps", 30))
     duration = float(settings.get("secondsPerImage", 3.0))
@@ -378,8 +412,15 @@ def generate_format(fmt_key, dimensions, images, temp_base, property_id, output_
         except Exception as e:
             print(f"Warning: Failed to add music: {e}")
 
-    # 6. Write File
-    out_filename = f"{property_id}_{fmt_key}.mp4"
+    # 6. Add Platform Label
+    if platform_name:
+        final_clip_with_text = add_platform_label(final_clip_with_text, platform_name, w, h)
+    
+    # 7. Write File
+    if platform_name:
+        out_filename = f"{property_id}_{platform_name.replace(' + ', '_')}_{fmt_key}.mp4"
+    else:
+        out_filename = f"{property_id}_{fmt_key}.mp4"
     out_path = os.path.join(output_dir, out_filename)
     
     try:
@@ -404,17 +445,39 @@ def generate_slideshow(images, property_id, output_dir, settings):
     generated_files = []
     temp_base = os.path.join(output_dir, "temp_proc")
     os.makedirs(temp_base, exist_ok=True)
+    
+    # Get platforms and formats from settings
+    platforms = settings.get("platforms", {})
+    selected_formats = settings.get("formats", {})
+    
+    # Map formats to platform names
+    format_to_platform = {}
+    for platform_id, enabled in platforms.items():
+        if enabled and platform_id in selected_formats:
+            fmt = selected_formats[platform_id]
+            platform_name = platform_id.upper()
+            if fmt not in format_to_platform:
+                format_to_platform[fmt] = []
+            format_to_platform[fmt].append(platform_name)
 
     try:
         tasks = []
         for fmt_key, dimensions in FORMATS.items():
-            tasks.append((fmt_key, dimensions, images, temp_base, property_id, output_dir, settings))
+            # Check if this format is selected by any platform
+            platform_names = format_to_platform.get(fmt_key, [])
+            if platform_names:  # Only generate if at least one platform uses this format
+                platform_label = " + ".join(platform_names)
+                tasks.append((fmt_key, dimensions, images, temp_base, property_id, output_dir, settings, platform_label))
+        
+        if not tasks:
+            print("No formats selected by any platform!")
+            return []
         
         num_processes = min(4, multiprocessing.cpu_count())
         
         with multiprocessing.Pool(processes=num_processes) as pool:
             results = pool.starmap(generate_format, tasks)
-            generated_files = results
+            generated_files = [f for f in results if f]  # Filter out None values
 
     finally:
         clean_temp(temp_base)
