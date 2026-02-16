@@ -79,6 +79,7 @@ const SAMPLE_MUSIC = Array.from({ length: 30 }, (_, i) => ({
 const Generate: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const MAX_IMAGES = 20;
   const [files, setFiles] = useState<FileItem[]>([]);
   const [draggedItem, setDraggedItem] = useState<number | null>(null);
   const [settings, setSettings] = useState<JobSettings>({
@@ -90,7 +91,7 @@ const Generate: React.FC = () => {
   
   // Text Overlay State
   const [textOverlay, setTextOverlay] = useState<TextOverlay>({
-    enabled: false,
+    enabled: true, // Default enabled for new layout
     title: '',
     price: '',
     phone: '',
@@ -98,6 +99,26 @@ const Generate: React.FC = () => {
     color: 'white',
     showLogo: false
   });
+
+  // New state for extended settings
+  const [selectedFont, setSelectedFont] = useState('Fira GO');
+  const [propertyRooms, setPropertyRooms] = useState('');
+  const [propertyArea, setPropertyArea] = useState('');
+  const [textPositionTop, setTextPositionTop] = useState(false);
+
+  const FONTS = [
+    'Fira GO', 'Montserrat', 'Oswald', 'Noto Sans Georgian', 'Inter', 
+    'Playfair Display', 'Ubuntu', 'Kanit', 'Roboto', 'Lora', 
+    'Exo 2', 'Arimo', 'Tinos', 'Merriweather', 'Noto Serif Georgian'
+  ];
+
+  const TEXT_COLORS = [
+    { name: 'white', value: '#FFFFFF' },
+    { name: 'black', value: '#000000' },
+    { name: 'orange', value: '#F97316' },
+    { name: 'red', value: '#EF4444' },
+    { name: 'green', value: '#22C55E' }
+  ];
   
   const [transitionDuration, setTransitionDuration] = useState(0.8);
   const [isMusicEnabled, setIsMusicEnabled] = useState(false);
@@ -161,18 +182,16 @@ const Generate: React.FC = () => {
   };
 
   const addFiles = (newFiles: File[]) => {
-    console.log('Adding files:', newFiles.length);
-    const images = newFiles.filter(f => f.type.startsWith('image/'));
-    console.log('Filtered images:', images.length);
-    const filesWithPreview = images.map((file, index) => ({
-      file: file,
-      preview: URL.createObjectURL(file),
-      id: `${file.name}-${index}-${Date.now()}`
-    }));
     setFiles(prev => {
-      const updated = [...prev, ...filesWithPreview];
-      console.log('Total files:', updated.length);
-      return updated;
+      const images = newFiles.filter(f => f.type.startsWith('image/'));
+      const remaining = MAX_IMAGES - prev.length;
+      if (remaining <= 0) return prev;
+      const toAdd = images.slice(0, remaining).map((file, index) => ({
+        file,
+        preview: URL.createObjectURL(file),
+        id: `${file.name}-${index}-${Date.now()}`
+      }));
+      return [...prev, ...toAdd];
     });
   };
 
@@ -226,7 +245,14 @@ const Generate: React.FC = () => {
     formData.append('propertyId', settings.propertyId || `job_${Date.now()}`);
     
     // Add text overlay settings
-    formData.append('textOverlay', JSON.stringify(textOverlay));
+    const overlayData = {
+      ...textOverlay,
+      font: selectedFont,
+      rooms: propertyRooms,
+      area: propertyArea,
+      position: textPositionTop ? 'top-left' : 'bottom-left' // Simplify logic for now
+    };
+    formData.append('textOverlay', JSON.stringify(overlayData));
     
     if (isMusicEnabled && (musicFile || selectedSampleMusic)) {
       if (musicFile) formData.append('music', musicFile);
@@ -273,110 +299,178 @@ const Generate: React.FC = () => {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      {/* Left Side */}
-      <div className="lg:col-span-7 space-y-6">
-        
-        {/* Image Upload */}
-        <div className="bg-surface rounded-xl border border-surface-light p-6">
-          <h2 className="text-xl font-semibold mb-4 flex items-center text-text-primary">
-            <Upload className="mr-2 text-primary" size={20} />
-            {t('generate.input_images')}
-          </h2>
-          
-          <div 
-            className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
-              isDragging ? 'border-primary bg-primary/10' : 'border-surface-light hover:border-primary'
-            }`}
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setIsDragging(false);
-              if (e.dataTransfer.files) addFiles(Array.from(e.dataTransfer.files));
-            }}
-          >
-            <input type="file" multiple accept="image/*" className="hidden" id="file-upload" onChange={handleFileSelect} />
-            <label htmlFor="file-upload" className="cursor-pointer block">
-              <Upload size={48} className="mx-auto text-text-secondary mb-3" />
-              <p className="text-lg font-medium text-text-primary">{t('generate.drag_drop')}</p>
-              <p className="text-sm text-text-muted mt-1">{t('generate.click_browse')}</p>
-            </label>
-          </div>
+    <div className="flex flex-col lg:flex-row gap-4 w-full px-0 items-start">
+      
+      {/* COLUMN 1: Text Overlay Settings (Left) - Wider Width */}
+      <div className="w-full lg:w-[380px] shrink-0">
+        <div className="bg-surface rounded-xl border border-surface-light p-5 h-fit">
+           <h3 className="text-sm font-medium text-text-secondary flex items-center mb-6">
+             <Type className="mr-2" size={16} />
+             ტექსტური პარამეტრები
+           </h3>
+           
+           <div className="space-y-6">
+             {/* Font Selection */}
+             <div>
+               <label className="text-xs text-text-muted mb-2 block">ფონტის არჩევა</label>
+               <select 
+                 className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-primary"
+                 value={selectedFont}
+                 onChange={(e) => setSelectedFont(e.target.value)}
+               >
+                 {FONTS.map(font => (
+                   <option key={font} value={font}>{font}</option>
+                 ))}
+               </select>
+             </div>
 
-          {files.length > 0 && (
-            <div className="mt-6 space-y-2">
-              <p className="text-sm text-text-secondary mb-3">
-                {t('generate.images_selected', { count: files.length })} - Drag to reorder
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {files.map((file, i) => (
-                  <div 
-                    key={file.id}
-                    draggable
-                    onDragStart={() => handleDragStart(i)}
-                    onDragOver={(e) => handleDragOver(e, i)}
-                    onDragEnd={handleDragEnd}
-                    className={`relative group aspect-square bg-surface-dark rounded-lg overflow-hidden border-2 transition-all cursor-move ${
-                      draggedItem === i ? 'border-primary opacity-50' : 'border-surface-light hover:border-primary'
-                    }`}
-                  >
-                    <img src={file.preview} alt={file.file.name} className="w-full h-full object-cover" />
-                    <div className="absolute top-1 left-1 bg-black/50 text-white rounded p-1 opacity-0 group-hover:opacity-100">
-                      <GripVertical size={12} />
-                    </div>
-                    <button 
-                      onClick={() => removeFile(i)}
-                      className="absolute top-1 right-1 bg-red-500/80 text-white rounded-full p-1 opacity-0 group-hover:opacity-100"
-                    >
-                      <X size={14} />
-                    </button>
-                    <div className="absolute bottom-1 left-1 bg-primary text-white text-xs rounded px-1.5 py-0.5">
-                      {i + 1}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+             {/* Visuals */}
+             <div>
+               <label className="text-xs text-text-muted mb-2 block">ვიზუალი</label>
+               <div className="flex justify-between items-center mb-3">
+                 <div className="flex gap-2">
+                   {TEXT_COLORS.map((c) => (
+                     <button
+                       key={c.name}
+                       onClick={() => setTextOverlay({...textOverlay, color: c.name as any})}
+                       className={`w-8 h-8 rounded-full border-2 transition-all ${
+                         textOverlay.color === c.name ? 'border-primary scale-110' : 'border-surface-light'
+                       }`}
+                       style={{ backgroundColor: c.value }}
+                       title={c.name}
+                     />
+                   ))}
+                 </div>
+               </div>
+               
+               <div className="flex items-center justify-between bg-surface-dark p-3 rounded-lg border border-surface-light">
+                 <span className="text-sm text-text-secondary">წარწერა ზემოთ</span>
+                 <button 
+                   className={`w-10 h-5 rounded-full relative transition-colors ${textPositionTop ? 'bg-primary' : 'bg-surface-light'}`}
+                   onClick={() => setTextPositionTop(!textPositionTop)}
+                 >
+                   <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${textPositionTop ? 'left-6' : 'left-1'}`} />
+                 </button>
+               </div>
+             </div>
+
+             {/* Property Details */}
+             <div className="grid grid-cols-2 gap-3">
+               <div>
+                 <label className="text-xs text-text-muted mb-1 block">ოთახები</label>
+                 <input 
+                   type="number" 
+                   className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-primary"
+                   placeholder="მაგ: 3"
+                   value={propertyRooms}
+                   onChange={e => setPropertyRooms(e.target.value)}
+                 />
+               </div>
+               <div>
+                 <label className="text-xs text-text-muted mb-1 block">კვადრატულობა (m²)</label>
+                 <input 
+                   type="number" 
+                   className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-primary"
+                   placeholder="მაგ: 85"
+                   value={propertyArea}
+                   onChange={e => setPropertyArea(e.target.value)}
+                 />
+               </div>
+             </div>
+
+             {/* Price */}
+             <div>
+               <label className="text-xs text-text-muted mb-1 block">ფასი</label>
+               <input 
+                 type="text" 
+                 className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary placeholder-text-muted focus:outline-none focus:border-primary"
+                 placeholder="მაგ: $150,000"
+                 value={textOverlay.price}
+                 onChange={e => setTextOverlay({...textOverlay, price: e.target.value})}
+               />
+             </div>
+
+             {/* Contact */}
+             <div>
+               <label className="text-xs text-text-muted mb-1 block">ტელეფონი</label>
+               <input 
+                 type="text" 
+                 className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary placeholder-text-muted focus:outline-none focus:border-primary"
+                 placeholder="მაგ: 599 12 34 56"
+                 value={textOverlay.phone}
+                 onChange={e => setTextOverlay({...textOverlay, phone: e.target.value})}
+               />
+             </div>
+           </div>
         </div>
+      </div>
 
-        {/* Text Overlay Preview */}
-        {textOverlay.enabled && (textOverlay.title || textOverlay.price) && files.length > 0 && (
-          <div className="bg-surface rounded-xl border border-surface-light p-6">
-            <h3 className="text-lg font-semibold text-text-primary mb-4 flex items-center">
-              <Eye className="mr-2 text-primary" size={18} />
-              Text Preview
-            </h3>
-            <div className="relative aspect-video bg-gray-800 rounded-lg overflow-hidden">
-              <img src={files[0]?.preview} alt="Preview" className="w-full h-full object-cover" />
-              <div className={`absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent flex flex-col ${positionClasses[textOverlay.position]}`}>
-                {textOverlay.title && (
-                  <span className={`text-lg font-bold ${textColorClasses[textOverlay.color]} drop-shadow-lg`}>
-                    {textOverlay.title}
-                  </span>
-                )}
-                {textOverlay.price && (
-                  <span className={`text-xl font-bold ${textColorClasses[textOverlay.color]} drop-shadow-lg mt-1`}>
-                    {textOverlay.price}
-                  </span>
-                )}
-                {textOverlay.phone && (
-                  <span className={`text-sm ${textColorClasses[textOverlay.color]} drop-shadow-lg mt-1 opacity-90`}>
-                    📞 {textOverlay.phone}
-                  </span>
-                )}
-              </div>
-              {textOverlay.showLogo && (
-                <div className="absolute top-4 right-4 bg-primary/90 text-white px-3 py-1 rounded text-sm font-bold">
-                  LUMINAVIDS
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+      {/* COLUMN 2: Image Upload (Middle) - Flexible Width */}
+      <div className="flex-1 min-w-0">
+        <div className="bg-surface rounded-xl border border-surface-light p-5 h-fit">
+           <h2 className="text-lg font-semibold mb-3 flex items-center text-text-primary">
+             <Upload className="mr-2 text-primary" size={18} />
+             {t('generate.input_images')}
+           </h2>
+           
+           <div 
+             className={`border-2 border-dashed rounded-xl p-4 text-center transition-all flex flex-col items-center justify-center min-h-[150px] ${
+               isDragging ? 'border-primary bg-primary/10' : 'border-surface-light hover:border-primary'
+             }`}
+             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+             onDragLeave={() => setIsDragging(false)}
+             onDrop={(e) => {
+               e.preventDefault();
+               setIsDragging(false);
+               if (e.dataTransfer.files) addFiles(Array.from(e.dataTransfer.files));
+             }}
+           >
+             <input type="file" multiple accept="image/*" className="hidden" id="file-upload" onChange={handleFileSelect} />
+             <label htmlFor="file-upload" className="cursor-pointer block">
+               <Upload size={48} className="mx-auto text-text-secondary mb-3" />
+               <p className="text-lg font-medium text-text-primary">{t('generate.drag_drop')}</p>
+               <p className="text-sm text-text-muted mt-1">{t('generate.click_browse')}</p>
+             </label>
+           </div>
 
-        {/* Progress */}
+           {files.length > 0 && (
+             <div className="mt-6 space-y-2">
+               <p className="text-sm text-text-secondary mb-3">
+                 {t('generate.images_selected', { count: files.length })} - Drag to reorder (max {MAX_IMAGES})
+               </p>
+               <div className="grid grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-2">
+                 {files.map((file, i) => (
+                   <div 
+                     key={file.id}
+                     draggable
+                     onDragStart={() => handleDragStart(i)}
+                     onDragOver={(e) => handleDragOver(e, i)}
+                     onDragEnd={handleDragEnd}
+                     className={`relative group h-24 md:h-28 bg-surface-dark rounded-lg overflow-hidden border-2 transition-all cursor-move ${
+                       draggedItem === i ? 'border-primary opacity-50' : 'border-surface-light hover:border-primary'
+                     }`}
+                   >
+                     <img src={file.preview} alt={file.file.name} className="w-full h-full object-contain" />
+                     <div className="absolute top-1 left-1 bg-black/50 text-white rounded p-1 opacity-0 group-hover:opacity-100">
+                       <GripVertical size={12} />
+                     </div>
+                     <button 
+                       onClick={() => removeFile(i)}
+                       className="absolute top-1 right-1 bg-red-500/80 text-white rounded-full p-1 opacity-0 group-hover:opacity-100"
+                     >
+                       <X size={14} />
+                     </button>
+                     <div className="absolute bottom-1 left-1 bg-primary text-white text-xs rounded px-1.5 py-0.5">
+                       {i + 1}
+                     </div>
+                   </div>
+                 ))}
+               </div>
+             </div>
+           )}
+        </div>
+        
+        {/* Progress & Results (Below Image Upload) */}
         {(status === 'running' || status === 'queued' || status === 'done') && (
           <div className="grid grid-cols-2 gap-4">
             {['9x16', '1x1', '4x5', '16x9'].map((fmt) => {
@@ -385,7 +479,7 @@ const Generate: React.FC = () => {
               const file = resultFiles.find(f => f.includes(fmt));
               
               return (
-                <div key={fmt} className="bg-surface border border-surface-light rounded-xl p-4 flex flex-col h-[280px]">
+                <div key={fmt} className="bg-surface border border-surface-light rounded-xl p-4 flex flex-col h-[200px]">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs font-bold text-text-muted bg-surface-dark px-2 py-1 rounded">{fmt}</span>
                     <span className="text-xs text-text-secondary">{isDone ? '✓' : `${pct}%`}</span>
@@ -414,345 +508,258 @@ const Generate: React.FC = () => {
         )}
       </div>
 
-      {/* Right Side - Settings */}
-      <div className="lg:col-span-5 space-y-6">
-        <div className="bg-surface rounded-xl border border-surface-light p-6">
-          <h2 className="text-xl font-semibold mb-4 flex items-center text-text-primary">
-            <SettingsIcon className="mr-2 text-primary" size={20} />
+      {/* COLUMN 3: Other Settings (Right) - Wider Width */}
+      <div className="w-full lg:w-[440px] shrink-0">
+        <div className="bg-surface rounded-xl border border-surface-light p-5 h-fit">
+          <h2 className="text-lg font-semibold mb-4 flex items-center text-text-primary">
+            <SettingsIcon className="mr-2 text-primary" size={18} />
             {t('generate.settings')}
           </h2>
 
-          {/* Text Overlay Section */}
-          <div className="mb-6 border-b border-surface-light pb-6">
-            <h3 className="text-sm font-medium text-text-secondary flex items-center mb-4">
-              <Type className="mr-2" size={16} />
-              Text Overlay (Optional)
-            </h3>
-            
+          <div className="space-y-6">
+            {/* Social Platforms (Target) */}
+            <div className="mb-6 border-b border-surface-light pb-6">
+              <h3 className="text-sm font-medium text-text-secondary mb-4 flex items-center">
+                <Monitor className="mr-2" size={16} />
+                {t('generate.target_platform')}
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                {SOCIAL_PLATFORMS.map((platform) => (
+                  <button
+                    key={platform.id}
+                    onClick={() => handlePlatformSelect(platform.id)}
+                    className={`flex items-center p-3 rounded-lg border transition-all ${
+                      selectedPlatform === platform.id 
+                        ? 'bg-surface-dark border-primary' 
+                        : 'bg-surface-dark border-surface-light hover:border-primary/50'
+                    }`}
+                  >
+                    <div 
+                      className="w-8 h-8 rounded-full flex items-center justify-center mr-3"
+                      style={{ backgroundColor: platform.color }}
+                    >
+                      <platform.icon size={16} className="text-white" />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-sm font-medium text-text-primary">{platform.name}</div>
+                      <div className="text-xs text-text-muted">{platform.formats.join(', ')}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Transitions */}
+            <div className="mb-6 border-b border-surface-light pb-6">
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                {t('generate.transition')}
+              </label>
+              
+              {/* Basic Switches */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {TRANSITIONS.filter(t => t.type === 'basic').map((tr) => (
+                  <button
+                    key={tr.value}
+                    onClick={() => setSettings({...settings, transition: tr.value})}
+                    className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                      settings.transition === tr.value 
+                        ? 'bg-primary border-primary text-white' 
+                        : 'bg-surface-dark border-surface-light text-text-secondary hover:border-primary'
+                    }`}
+                  >
+                    <span className="flex items-center">
+                      <span className="mr-2">{tr.icon}</span>
+                      {t(`generate.${tr.labelKey}`)}
+                    </span>
+                    <div className={`w-10 h-5 rounded-full relative transition-colors ${
+                      settings.transition === tr.value ? 'bg-white/30' : 'bg-black/20'
+                    }`}>
+                      <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${
+                        settings.transition === tr.value ? 'left-6' : 'left-1'
+                      }`} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Creative Grid */}
+              <div className="grid grid-cols-3 xl:grid-cols-4 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                {TRANSITIONS.filter(t => t.type === 'creative').map((tr) => (
+                  <button
+                    key={tr.value}
+                    onClick={() => setSettings({...settings, transition: tr.value})}
+                    className={`p-2 rounded-lg text-xs text-center transition-all border flex flex-col items-center justify-center aspect-square ${
+                      settings.transition === tr.value 
+                        ? 'bg-primary border-primary text-white' 
+                        : 'bg-surface-dark border-surface-light text-text-secondary hover:border-primary'
+                    }`}
+                  >
+                    <span className="block text-xl mb-1">{tr.icon}</span>
+                    <span className="line-clamp-2 leading-tight">{t(`generate.${tr.labelKey}`)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Music */}
+            <div className="mb-6 border-b border-surface-light pb-6">
+              <div className="flex justify-between items-center mb-4">
+                <label className="text-sm font-medium text-text-secondary">{t('generate.music_label')}</label>
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-text-muted">{isMusicEnabled ? 'Enabled' : 'Disabled'}</span>
+                  <button 
+                    className={`w-10 h-5 rounded-full relative transition-colors ${isMusicEnabled ? 'bg-primary' : 'bg-surface-light'}`}
+                    onClick={() => { setIsMusicEnabled(!isMusicEnabled); if (isMusicEnabled) stopMusicPreview(); }}
+                  >
+                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${isMusicEnabled ? 'left-6' : 'left-1'}`} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="bg-surface-dark rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+                  {SAMPLE_MUSIC.map((sample) => (
+                    <div 
+                      key={sample.id}
+                      className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${
+                        selectedSampleMusic === sample.id 
+                          ? 'bg-primary/20 border border-primary' 
+                          : 'hover:bg-surface-light border border-transparent'
+                      }`}
+                      onClick={() => {
+                        playMusicPreview(sample.id);
+                        if (!isMusicEnabled) setIsMusicEnabled(true);
+                      }}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Music size={16} className={selectedSampleMusic === sample.id ? 'text-primary' : 'text-text-muted'} />
+                        <div className="flex flex-col">
+                          <span className={`text-sm font-medium ${selectedSampleMusic === sample.id ? 'text-primary' : 'text-text-secondary'}`}>
+                            {sample.name}
+                          </span>
+                          <span className="text-xs text-text-muted">{sample.duration} • {sample.genre}</span>
+                        </div>
+                      </div>
+                      {isPlayingMusic && selectedSampleMusic === sample.id ? (
+                        <div className="bg-primary/20 p-1.5 rounded-full">
+                          <Volume2 size={14} className="text-primary animate-pulse" />
+                        </div>
+                      ) : (
+                        <div className="bg-surface-light p-1.5 rounded-full">
+                          <Play size={14} className="text-text-secondary" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                
+                {isMusicEnabled && (
+                  <div className="flex items-center space-x-3 bg-surface-dark p-2 rounded-lg border border-surface-light">
+                    <VolumeX size={14} className="text-text-muted" />
+                    <input 
+                      type="range" min="0" max="100"
+                      className="flex-1 h-2 bg-surface-light rounded-lg accent-primary cursor-pointer"
+                      value={musicVolume}
+                      onChange={(e) => { setMusicVolume(parseInt(e.target.value)); if (audioRef.current) audioRef.current.volume = parseInt(e.target.value) / 100; }}
+                    />
+                    <Volume2 size={14} className="text-text-muted" />
+                    <span className="text-xs font-mono text-text-secondary w-8 text-right">{musicVolume}%</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Other Settings */}
             <div className="space-y-4">
               <input 
                 type="text" 
                 className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary placeholder-text-muted focus:outline-none focus:border-primary"
-                placeholder="Title (e.g., 3-Room Apartment)"
-                value={textOverlay.title}
-                onChange={e => setTextOverlay({...textOverlay, title: e.target.value, enabled: true})}
-              />
-              <input 
-                type="text" 
-                className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary placeholder-text-muted focus:outline-none focus:border-primary"
-                placeholder="Price (e.g., 150,000₾)"
-                value={textOverlay.price}
-                onChange={e => setTextOverlay({...textOverlay, price: e.target.value, enabled: true})}
-              />
-              <input 
-                type="text" 
-                className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary placeholder-text-muted focus:outline-none focus:border-primary"
-                placeholder="Phone (e.g., 599 12 34 56)"
-                value={textOverlay.phone}
-                onChange={e => setTextOverlay({...textOverlay, phone: e.target.value, enabled: true})}
+                placeholder={t('generate.property_id_placeholder')}
+                value={settings.propertyId}
+                onChange={e => setSettings({...settings, propertyId: e.target.value})}
               />
 
-              {/* Position */}
-              <div>
-                <label className="text-xs text-text-muted mb-2 block">Position</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['bottom-left', 'bottom-center', 'bottom-right'] as const).map((pos) => (
-                    <button
-                      key={pos}
-                      onClick={() => setTextOverlay({...textOverlay, position: pos, enabled: true})}
-                      className={`p-2 rounded text-xs capitalize transition-colors ${
-                        textOverlay.position === pos 
-                          ? 'bg-primary text-white' 
-                          : 'bg-surface-dark text-text-secondary hover:bg-surface-light'
-                      }`}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-text-muted mb-1 block">Duration per image</label>
+                  <div className="flex items-center space-x-2 bg-surface-dark rounded-lg p-1 border border-surface-light">
+                    <button 
+                      onClick={() => setSettings(s => ({...s, secondsPerImage: Math.max(0.5, s.secondsPerImage - 0.5)}))}
+                      className="p-1 hover:bg-surface-light rounded transition-colors text-text-primary"
                     >
-                      {pos.replace('-', ' ')}
+                      <Minus size={16} />
                     </button>
-                  ))}
+                    <span className="flex-1 text-center text-sm font-medium text-text-primary">
+                      {settings.secondsPerImage.toFixed(1)}s
+                    </span>
+                    <button 
+                      onClick={() => setSettings(s => ({...s, secondsPerImage: Math.min(5, s.secondsPerImage + 0.5)}))}
+                      className="p-1 hover:bg-surface-light rounded transition-colors text-text-primary"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-
-              {/* Color */}
-              <div>
-                <label className="text-xs text-text-muted mb-2 block flex items-center">
-                  <Palette className="mr-1" size={12} />
-                  Text Color
-                </label>
-                <div className="flex gap-2">
-                  {(['white', 'black', 'orange'] as const).map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => setTextOverlay({...textOverlay, color, enabled: true})}
-                      className={`w-8 h-8 rounded-full border-2 transition-all ${
-                        textOverlay.color === color ? 'border-primary scale-110' : 'border-transparent'
-                      } ${
-                        color === 'white' ? 'bg-white' : 
-                        color === 'black' ? 'bg-gray-900' : 
-                        'bg-primary'
-                      }`}
+                <div>
+                  <label className="text-xs text-text-muted mb-1 block">Transition Duration</label>
+                  <div className="flex items-center space-x-2">
+                     <input type="range" min="0.5" max="3" step="0.1"
+                      className="flex-1 h-2 bg-surface-light rounded-lg accent-primary"
+                      value={transitionDuration}
+                      onChange={e => setTransitionDuration(parseFloat(e.target.value))}
                     />
-                  ))}
+                    <span className="text-sm text-text-secondary w-8 text-right">{transitionDuration}s</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Logo Toggle */}
-              <div className="flex justify-between items-center pt-2">
-                <span className="text-sm text-text-secondary flex items-center">
-                  <ImageIcon className="mr-2" size={14} />
-                  Show LUMINAVIDS Logo
-                </span>
-                <button 
-                  className={`w-10 h-5 rounded-full relative transition-colors ${textOverlay.showLogo ? 'bg-primary' : 'bg-surface-light'}`}
-                  onClick={() => setTextOverlay({...textOverlay, showLogo: !textOverlay.showLogo, enabled: true})}
-                >
-                  <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${textOverlay.showLogo ? 'left-6' : 'left-1'}`} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Social Platforms (Target) */}
-          <div className="mb-6 border-b border-surface-light pb-6">
-            <h3 className="text-sm font-medium text-text-secondary mb-4 flex items-center">
-              <Monitor className="mr-2" size={16} />
-              Target Platform
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              {SOCIAL_PLATFORMS.map((platform) => (
-                <button
-                  key={platform.id}
-                  onClick={() => handlePlatformSelect(platform.id)}
-                  className={`flex items-center p-3 rounded-lg border transition-all ${
-                    selectedPlatform === platform.id 
-                      ? 'bg-surface-dark border-primary' 
-                      : 'bg-surface-dark border-surface-light hover:border-primary/50'
-                  }`}
-                >
-                  <div 
-                    className="w-8 h-8 rounded-full flex items-center justify-center mr-3"
-                    style={{ backgroundColor: platform.color }}
-                  >
-                    <platform.icon size={16} className="text-white" />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-sm font-medium text-text-primary">{platform.name}</div>
-                    <div className="text-xs text-text-muted">{platform.formats.join(', ')}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Transitions */}
-          <div className="mb-6 border-b border-surface-light pb-6">
-            <label className="block text-sm font-medium text-text-secondary mb-2">
-              {t('generate.transition')}
-            </label>
-            
-            {/* Basic Switches */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {TRANSITIONS.filter(t => t.type === 'basic').map((tr) => (
-                <button
-                  key={tr.value}
-                  onClick={() => setSettings({...settings, transition: tr.value})}
-                  className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
-                    settings.transition === tr.value 
-                      ? 'bg-primary border-primary text-white' 
-                      : 'bg-surface-dark border-surface-light text-text-secondary hover:border-primary'
-                  }`}
-                >
-                  <span className="flex items-center">
-                    <span className="mr-2">{tr.icon}</span>
-                    {t(`generate.${tr.labelKey}`)}
-                  </span>
-                  <div className={`w-10 h-5 rounded-full relative transition-colors ${
-                    settings.transition === tr.value ? 'bg-white/30' : 'bg-black/20'
-                  }`}>
-                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${
-                      settings.transition === tr.value ? 'left-6' : 'left-1'
-                    }`} />
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {/* Creative Grid */}
-            <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-              {TRANSITIONS.filter(t => t.type === 'creative').map((tr) => (
-                <button
-                  key={tr.value}
-                  onClick={() => setSettings({...settings, transition: tr.value})}
-                  className={`p-2 rounded-lg text-xs text-center transition-all border flex flex-col items-center justify-center aspect-square ${
-                    settings.transition === tr.value 
-                      ? 'bg-primary border-primary text-white' 
-                      : 'bg-surface-dark border-surface-light text-text-secondary hover:border-primary'
-                  }`}
-                >
-                  <span className="block text-xl mb-1">{tr.icon}</span>
-                  <span className="line-clamp-2 leading-tight">{t(`generate.${tr.labelKey}`)}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Music */}
-          <div className="mb-6 border-b border-surface-light pb-6">
-            <div className="flex justify-between items-center mb-4">
-              <label className="text-sm font-medium text-text-secondary">{t('generate.music_label')}</label>
-              <div className="flex items-center space-x-2">
-                <span className="text-xs text-text-muted">{isMusicEnabled ? 'Enabled' : 'Disabled'}</span>
-                <button 
-                  className={`w-10 h-5 rounded-full relative transition-colors ${isMusicEnabled ? 'bg-primary' : 'bg-surface-light'}`}
-                  onClick={() => { setIsMusicEnabled(!isMusicEnabled); if (isMusicEnabled) stopMusicPreview(); }}
-                >
-                  <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${isMusicEnabled ? 'left-6' : 'left-1'}`} />
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="bg-surface-dark rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
-                {SAMPLE_MUSIC.map((sample) => (
-                  <div 
-                    key={sample.id}
-                    className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${
-                      selectedSampleMusic === sample.id 
-                        ? 'bg-primary/20 border border-primary' 
-                        : 'hover:bg-surface-light border border-transparent'
-                    }`}
-                    onClick={() => {
-                      playMusicPreview(sample.id);
-                      if (!isMusicEnabled) setIsMusicEnabled(true);
-                    }}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <Music size={16} className={selectedSampleMusic === sample.id ? 'text-primary' : 'text-text-muted'} />
-                      <div className="flex flex-col">
-                        <span className={`text-sm font-medium ${selectedSampleMusic === sample.id ? 'text-primary' : 'text-text-secondary'}`}>
-                          {sample.name}
-                        </span>
-                        <span className="text-xs text-text-muted">{sample.duration} • {sample.genre}</span>
-                      </div>
-                    </div>
-                    {isPlayingMusic && selectedSampleMusic === sample.id ? (
-                      <div className="bg-primary/20 p-1.5 rounded-full">
-                        <Volume2 size={14} className="text-primary animate-pulse" />
-                      </div>
-                    ) : (
-                      <div className="bg-surface-light p-1.5 rounded-full">
-                        <Play size={14} className="text-text-secondary" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              
-              {isMusicEnabled && (
-                <div className="flex items-center space-x-3 bg-surface-dark p-2 rounded-lg border border-surface-light">
-                  <VolumeX size={14} className="text-text-muted" />
-                  <input 
-                    type="range" min="0" max="100"
-                    className="flex-1 h-2 bg-surface-light rounded-lg accent-primary cursor-pointer"
-                    value={musicVolume}
-                    onChange={(e) => { setMusicVolume(parseInt(e.target.value)); if (audioRef.current) audioRef.current.volume = parseInt(e.target.value) / 100; }}
+              <div className="mt-4">
+                 <label className="text-xs text-text-muted mb-1 block">FPS</label>
+                 <input type="number" 
+                    className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-primary"
+                    value={settings.fps}
+                    onChange={e => setSettings({...settings, fps: parseInt(e.target.value)})}
                   />
-                  <Volume2 size={14} className="text-text-muted" />
-                  <span className="text-xs font-mono text-text-secondary w-8 text-right">{musicVolume}%</span>
-                </div>
-              )}
+              </div>
             </div>
+
+            {/* Generate Button (Moved inside) */}
+            {(status === 'running' || status === 'queued') ? (
+              <div className="mt-6 space-y-2">
+                <div className="w-full bg-surface-light rounded-full h-2">
+                  <div className="bg-primary h-full animate-pulse w-full" />
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-primary text-sm">{status === 'queued' ? 'Queued...' : 'Rendering...'}</span>
+                  <button onClick={cancelJob} className="text-xs text-red-400">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <button 
+                className={`w-full mt-6 flex items-center justify-center py-3 text-lg font-semibold rounded-lg transition-all ${
+                  files.length === 0 
+                    ? 'bg-surface-light text-text-muted cursor-not-allowed' 
+                    : 'bg-primary hover:bg-primary-dark text-white'
+                }`}
+                onClick={startJob}
+                disabled={files.length === 0}
+              >
+                <Play className="mr-2" fill="currentColor" size={20} />
+                {t('generate.btn_generate') || 'ვიდეოს გენერაცია'}
+              </button>
+            )}
+
+            {status === 'done' && (
+              <div className="mt-4 bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-lg text-center text-sm">
+                წარმატება! <button onClick={() => navigate('/outputs')} className="underline font-bold">ნახე შედეგები</button>
+              </div>
+            )}
+            {status === 'error' && (
+              <div className="mt-4 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-center text-sm">
+                {errorMessage || 'შეცდომა მოხდა'}
+              </div>
+            )}
           </div>
-
-          {/* Other Settings */}
-          <div className="space-y-4">
-            <input 
-              type="text" 
-              className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary placeholder-text-muted focus:outline-none focus:border-primary"
-              placeholder={t('generate.property_id_placeholder')}
-              value={settings.propertyId}
-              onChange={e => setSettings({...settings, propertyId: e.target.value})}
-            />
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-text-muted mb-1 block">Duration per image</label>
-                <div className="flex items-center space-x-2 bg-surface-dark rounded-lg p-1 border border-surface-light">
-                  <button 
-                    onClick={() => setSettings(s => ({...s, secondsPerImage: Math.max(0.5, s.secondsPerImage - 0.5)}))}
-                    className="p-1 hover:bg-surface-light rounded transition-colors text-text-primary"
-                  >
-                    <Minus size={16} />
-                  </button>
-                  <span className="flex-1 text-center text-sm font-medium text-text-primary">
-                    {settings.secondsPerImage.toFixed(1)}s
-                  </span>
-                  <button 
-                    onClick={() => setSettings(s => ({...s, secondsPerImage: Math.min(5, s.secondsPerImage + 0.5)}))}
-                    className="p-1 hover:bg-surface-light rounded transition-colors text-text-primary"
-                  >
-                    <Plus size={16} />
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-text-muted mb-1 block">Transition Duration</label>
-                <div className="flex items-center space-x-2">
-                   <input type="range" min="0.5" max="3" step="0.1"
-                    className="flex-1 h-2 bg-surface-light rounded-lg accent-primary"
-                    value={transitionDuration}
-                    onChange={e => setTransitionDuration(parseFloat(e.target.value))}
-                  />
-                  <span className="text-sm text-text-secondary w-8 text-right">{transitionDuration}s</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4">
-               <label className="text-xs text-text-muted mb-1 block">FPS</label>
-               <input type="number" 
-                  className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-primary"
-                  value={settings.fps}
-                  onChange={e => setSettings({...settings, fps: parseInt(e.target.value)})}
-                />
-            </div>
-          </div>
-
-          {/* Generate Button */}
-          {(status === 'running' || status === 'queued') ? (
-            <div className="mt-4 space-y-2">
-              <div className="w-full bg-surface-light rounded-full h-2">
-                <div className="bg-primary h-full animate-pulse w-full" />
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-primary text-sm">{status === 'queued' ? 'Queued...' : 'Rendering...'}</span>
-                <button onClick={cancelJob} className="text-xs text-red-400">Cancel</button>
-              </div>
-            </div>
-          ) : (
-            <button 
-              className={`w-full mt-4 flex items-center justify-center py-3 text-lg font-semibold rounded-lg transition-all ${
-                files.length === 0 
-                  ? 'bg-surface-light text-text-muted cursor-not-allowed' 
-                  : 'bg-primary hover:bg-primary-dark text-white'
-              }`}
-              onClick={startJob}
-              disabled={files.length === 0}
-            >
-              <Play className="mr-2" fill="currentColor" size={20} />
-              {t('generate.btn_generate') || 'Generate 4 Videos'}
-            </button>
-          )}
-
-          {status === 'done' && (
-            <div className="mt-4 bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-lg text-center text-sm">
-              Success! <button onClick={() => navigate('/outputs')} className="underline font-bold">View outputs</button>
-            </div>
-          )}
-          {status === 'error' && (
-            <div className="mt-4 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-center text-sm">
-              {errorMessage || 'Error occurred'}
-            </div>
-          )}
         </div>
       </div>
     </div>

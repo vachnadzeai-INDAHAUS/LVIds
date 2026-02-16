@@ -11,24 +11,23 @@ export default {
       colors: {
         // ჩვენი ფერების სქემა / Our color scheme
         primary: {
-          DEFAULT: '#F97316',    // სტაფილოსფერი (40%)
-          light: '#FB923C',      // ღია სტაფილოსფერი (30%)
+          DEFAULT: '#F97316',    // სტაფილოსფერი (Orange)
+          light: '#FB923C',      // ღია სტაფილოსფერი
           dark: '#EA580C',       // მუქი სტაფილოსფერი
         },
         surface: {
-          DEFAULT: '#1F2937',    // ნაცრისფერი (30%)
+          DEFAULT: '#1F2937',    // მუქი ნაცრისფერი (Dark Gray)
           light: '#374151',      // ღია ნაცრისფერი
-          dark: '#111827',       // მუქი ნაცრისფერი
+          dark: '#111827',       // ძალიან მუქი
         },
-        // ტექსტის ფერები - ნაცრისფრად!
+        // ტექსტის ფერები
         text: {
-          primary: '#F3F4F6',    // თეთრი (10%)
-          secondary: '#9CA3AF',  // ნაცრისფერი - მთავარი ტექსტი
+          primary: '#F3F4F6',    // თეთრი/ღია (Primary text)
+          secondary: '#9CA3AF',  // ნაცრისფერი (Secondary text)
           muted: '#6B7280',      // მუქი ნაცრისფერი
         }
       },
       animation: {
-        // ახალი ანიმაციები
         'fade-in': 'fadeIn 0.3s ease-in-out',
         'slide-up': 'slideUp 0.4s ease-out',
         'slide-down': 'slideDown 0.4s ease-out',
@@ -36,11 +35,6 @@ export default {
         'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'spin-slow': 'spin 3s linear infinite',
         'bounce-slow': 'bounce 2s infinite',
-        // გადასვლის ეფექტების პრევიუ
-        'transition-slide-left': 'slideLeft 0.5s ease-in-out',
-        'transition-slide-right': 'slideRight 0.5s ease-in-out',
-        'transition-fade': 'fadeTransition 0.5s ease-in-out',
-        'transition-zoom': 'zoomTransition 0.5s ease-in-out',
       },
       keyframes: {
         fadeIn: {
@@ -59,29 +53,6 @@ export default {
           '0%': { transform: 'scale(0.95)', opacity: '0' },
           '100%': { transform: 'scale(1)', opacity: '1' },
         },
-        // გადასვლის ეფექტები
-        slideLeft: {
-          '0%': { transform: 'translateX(0)' },
-          '100%': { transform: 'translateX(-100%)' },
-        },
-        slideRight: {
-          '0%': { transform: 'translateX(0)' },
-          '100%': { transform: 'translateX(100%)' },
-        },
-        fadeTransition: {
-          '0%': { opacity: '1' },
-          '50%': { opacity: '0' },
-          '100%': { opacity: '1' },
-        },
-        zoomTransition: {
-          '0%': { transform: 'scale(1)' },
-          '50%': { transform: 'scale(1.2)' },
-          '100%': { transform: 'scale(1)' },
-        },
-      },
-      transitionDuration: {
-        '400': '400ms',
-        '600': '600ms',
       },
     },
   },

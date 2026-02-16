@@ -128,7 +128,10 @@ def create_text_overlay(clip, textOverlay, width, height):
     position_map = {
         'bottom-left': ('left', height - 150),
         'bottom-center': ('center', height - 150),
-        'bottom-right': ('right', height - 150)
+        'bottom-right': ('right', height - 150),
+        'top-left': ('left', 250),
+        'top-center': ('center', 250),
+        'top-right': ('right', 250)
     }
     
     text_align, y_pos = position_map.get(position, ('left', height - 150))

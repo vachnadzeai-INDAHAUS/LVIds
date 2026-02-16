@@ -66,8 +66,8 @@ const Layout: React.FC = () => {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 mt-16 p-6">
-        <div className="max-w-7xl mx-auto w-full">
+      <main className="flex-1 mt-16 p-2">
+        <div className="w-full">
           <Outlet />
         </div>
       </main>

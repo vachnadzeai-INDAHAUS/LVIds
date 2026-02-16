@@ -276,7 +276,7 @@ app.post('/api/generate', (req, res, next) => {
     const jobId = uuidv4();
     (req as any).jobId = jobId;
     next();
-}, upload.fields([{ name: 'images' }, { name: 'music', maxCount: 1 }]), (req, res) => {
+}, upload.fields([{ name: 'images', maxCount: 20 }, { name: 'music', maxCount: 1 }]), (req, res) => {
     try {
         const jobId = (req as any).jobId;
         const propertyId = req.body.propertyId || 'prop';
