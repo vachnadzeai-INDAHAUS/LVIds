@@ -13,7 +13,7 @@ const Layout: React.FC = () => {
         <div className="w-full flex justify-between items-center">
           {/* Left: Logo */}
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 relative flex items-center justify-center">
+            <div className="w-14 h-14 relative flex items-center justify-center">
                <img
                  src="/src/assets/logo-main.jpg"
                  alt="Lumina Vids Logo"
