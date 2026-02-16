@@ -82,6 +82,7 @@ const Generate: React.FC = () => {
   const MAX_IMAGES = 100;
   const [files, setFiles] = useState<FileItem[]>([]);
   const [draggedItem, setDraggedItem] = useState<number | null>(null);
+  const [hoveredTransition, setHoveredTransition] = useState<string | null>(null);
   const [settings, setSettings] = useState<JobSettings>({
     fps: 30,
     secondsPerImage: 3.2,
@@ -804,11 +805,20 @@ const Generate: React.FC = () => {
               </div>
             </div>
 
-            {/* Transitions */}
+            {/* Transitions with Hover Preview */}
             <div className="mb-6 border-b border-surface-light pb-6">
-              <label className="block text-sm font-medium text-text-secondary mb-2">
-                {t('generate.transition')}
-              </label>
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-medium text-text-secondary">
+                  {t('generate.transition')}
+                </label>
+                {/* Hover Preview Box */}
+                {hoveredTransition && (
+                  <div className="flex items-center space-x-2 text-xs text-primary animate-pulse">
+                    <span>👁️ ნახავ:</span>
+                    <span className="font-bold">{t(`generate.transition_${hoveredTransition}`)}</span>
+                  </div>
+                )}
+              </div>
               
               {/* Basic Switches */}
               <div className="grid grid-cols-2 gap-3 mb-4">
@@ -816,15 +826,21 @@ const Generate: React.FC = () => {
                   <button
                     key={tr.value}
                     onClick={() => setSettings({...settings, transition: tr.value})}
-                    className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                    onMouseEnter={() => setHoveredTransition(tr.value)}
+                    onMouseLeave={() => setHoveredTransition(null)}
+                    className={`flex items-center justify-between p-3 rounded-lg border transition-all relative overflow-hidden ${
                       settings.transition === tr.value 
                         ? 'bg-primary border-primary text-white' 
                         : 'bg-surface-dark border-surface-light text-text-secondary hover:border-primary'
-                    }`}
+                    } ${hoveredTransition === tr.value ? 'ring-2 ring-primary/50' : ''}`}
                   >
-                    <span className="flex items-center">
-                      <span className="mr-2">{tr.icon}</span>
-                      {t(`generate.${tr.labelKey}`)}
+                    {/* Hover Animation Preview */}
+                    {hoveredTransition === tr.value && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-transparent animate-pulse" />
+                    )}
+                    <span className="flex items-center relative z-10">
+                      <span className="mr-2 text-lg">{tr.icon}</span>
+                      <span className="font-medium">{t(`generate.${tr.labelKey}`)}</span>
                     </span>
                     <div className={`w-10 h-5 rounded-full relative transition-colors ${
                       settings.transition === tr.value ? 'bg-white/30' : 'bg-black/20'
@@ -837,22 +853,45 @@ const Generate: React.FC = () => {
                 ))}
               </div>
 
-              {/* Creative Grid */}
+              {/* Creative Grid with Hover Effects */}
               <div className="grid grid-cols-3 xl:grid-cols-4 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                 {TRANSITIONS.filter(t => t.type === 'creative').map((tr) => (
                   <button
                     key={tr.value}
                     onClick={() => setSettings({...settings, transition: tr.value})}
-                    className={`p-2 rounded-lg text-xs text-center transition-all border flex flex-col items-center justify-center aspect-square ${
+                    onMouseEnter={() => setHoveredTransition(tr.value)}
+                    onMouseLeave={() => setHoveredTransition(null)}
+                    className={`p-2 rounded-lg text-xs text-center transition-all border flex flex-col items-center justify-center aspect-square relative overflow-hidden ${
                       settings.transition === tr.value 
                         ? 'bg-primary border-primary text-white' 
                         : 'bg-surface-dark border-surface-light text-text-secondary hover:border-primary'
-                    }`}
+                    } ${hoveredTransition === tr.value ? 'scale-105 shadow-lg' : ''}`}
                   >
-                    <span className="block text-xl mb-1">{tr.icon}</span>
-                    <span className="line-clamp-2 leading-tight">{t(`generate.${tr.labelKey}`)}</span>
+                    {/* Hover Glow Effect */}
+                    {hoveredTransition === tr.value && (
+                      <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-transparent to-primary/10 animate-pulse" />
+                    )}
+                    <span className={`block text-2xl mb-1 relative z-10 transition-transform ${hoveredTransition === tr.value ? 'scale-110' : ''}`}>
+                      {tr.icon}
+                    </span>
+                    <span className="line-clamp-2 leading-tight relative z-10 font-medium">
+                      {t(`generate.${tr.labelKey}`)}
+                    </span>
+                    {/* Preview indicator on hover */}
+                    {hoveredTransition === tr.value && (
+                      <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-8 h-1 bg-primary rounded-full" />
+                    )}
                   </button>
                 ))}
+              </div>
+              
+              {/* Selected Transition Info */}
+              <div className="mt-3 p-2 bg-surface-dark/50 rounded-lg text-center">
+                <span className="text-xs text-text-secondary">არჩეული: </span>
+                <span className="text-sm font-bold text-primary">
+                  {TRANSITIONS.find(t => t.value === settings.transition)?.icon} {' '}
+                  {t(`generate.transition_${settings.transition}`)}
+                </span>
               </div>
             </div>
 
