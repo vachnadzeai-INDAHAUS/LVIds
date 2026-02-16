@@ -146,6 +146,44 @@ const Generate: React.FC = () => {
   const [resultFiles, setResultFiles] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
+  
+  // Platform selection state - which platforms are enabled and their formats
+  const [enabledPlatforms, setEnabledPlatforms] = useState<Record<string, boolean>>({
+    tiktok: false,
+    instagram: false,
+    facebook: false,
+    youtube: false
+  });
+  const [selectedFormats, setSelectedFormats] = useState<Record<string, string>>({
+    tiktok: '9x16',
+    instagram: '1x1',
+    facebook: '1x1',
+    youtube: '9x16'
+  });
+
+  const togglePlatform = (id: string) => {
+    setEnabledPlatforms(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+    // Auto-configure when enabling
+    if (!enabledPlatforms[id]) {
+      switch(id) {
+        case 'tiktok':
+          setSettings({...settings, fps: 30, secondsPerImage: 2.5});
+          break;
+        case 'instagram':
+          setSettings({...settings, fps: 30, secondsPerImage: 3});
+          break;
+        case 'facebook':
+          setSettings({...settings, fps: 30, secondsPerImage: 3.5});
+          break;
+        case 'youtube':
+          setSettings({...settings, fps: 60, secondsPerImage: 4});
+          break;
+      }
+    }
+  };
 
   const handlePlatformSelect = (id: string) => {
     if (selectedPlatform === id) {
@@ -262,6 +300,13 @@ const Generate: React.FC = () => {
   const startJob = async () => {
     if (files.length === 0) return;
     
+    // Check if at least one platform is enabled
+    const hasEnabledPlatform = Object.values(enabledPlatforms).some(enabled => enabled);
+    if (!hasEnabledPlatform) {
+      setErrorMessage('გთხოვთ აირჩიოთ მინიმუმ ერთი სოციალური ქსელი');
+      return;
+    }
+    
     setStatus('queued');
     setErrorMessage(null);
     setProgress({});
@@ -291,7 +336,9 @@ const Generate: React.FC = () => {
       secondsPerImage: settings.secondsPerImage,
       transition: settings.transition,
       musicVolume: isMusicEnabled ? musicVolume / 100 : 0,
-      transitionDuration: transitionDuration
+      transitionDuration: transitionDuration,
+      platforms: enabledPlatforms,
+      formats: selectedFormats
     }));
 
     try {
@@ -673,35 +720,85 @@ const Generate: React.FC = () => {
           </h2>
 
           <div className="space-y-6">
-            {/* Social Platforms (Target) */}
+            {/* Social Platforms (Target) - New Design with Toggles */}
             <div className="mb-6 border-b border-surface-light pb-6">
               <h3 className="text-sm font-medium text-text-secondary mb-4 flex items-center">
                 <Monitor className="mr-2" size={16} />
                 {t('generate.target_platform')}
               </h3>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-3">
                 {SOCIAL_PLATFORMS.map((platform) => (
-                  <button
+                  <div 
                     key={platform.id}
-                    onClick={() => handlePlatformSelect(platform.id)}
-                    className={`flex items-center p-3 rounded-lg border transition-all ${
-                      selectedPlatform === platform.id 
+                    className={`p-3 rounded-lg border transition-all ${
+                      enabledPlatforms[platform.id] 
                         ? 'bg-surface-dark border-primary' 
-                        : 'bg-surface-dark border-surface-light hover:border-primary/50'
+                        : 'bg-surface-dark/50 border-surface-light'
                     }`}
                   >
-                    <div 
-                      className="w-8 h-8 rounded-full flex items-center justify-center mr-3"
-                      style={{ backgroundColor: platform.color }}
-                    >
-                      <platform.icon size={16} className="text-white" />
+                    {/* Header: Logo Image + Name + Toggle */}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center">
+                        <img 
+                          src={`/src/assets/logo-${platform.id}.jpg`}
+                          alt={platform.name}
+                          className="w-10 h-10 rounded-lg object-cover mr-3 shadow-md"
+                        />
+                        <div className="text-sm font-medium text-text-primary">{platform.name}</div>
+                      </div>
+                      {/* Toggle Switch */}
+                      <button
+                        onClick={() => togglePlatform(platform.id)}
+                        className={`w-12 h-6 rounded-full relative transition-colors ${
+                          enabledPlatforms[platform.id] ? 'bg-primary' : 'bg-surface-light'
+                        }`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+                          enabledPlatforms[platform.id] ? 'left-7' : 'left-1'
+                        }`} />
+                      </button>
                     </div>
-                    <div className="text-left">
-                      <div className="text-sm font-medium text-text-primary">{platform.name}</div>
-                      <div className="text-xs text-text-muted">{platform.formats.join(', ')}</div>
-                    </div>
-                  </button>
+                    
+                    {/* Format Dropdown (only show if enabled) */}
+                    {enabledPlatforms[platform.id] && (
+                      <div className="mt-2 pl-11">
+                        <select
+                          value={selectedFormats[platform.id]}
+                          onChange={(e) => setSelectedFormats({...selectedFormats, [platform.id]: e.target.value})}
+                          className="w-full bg-surface border border-surface-light rounded px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-primary"
+                        >
+                          {platform.formats.map((format) => (
+                            <option key={format} value={format}>
+                              {format === '9x16' ? '9:16 (Vertical)' : 
+                               format === '1x1' ? '1:1 (Square)' : 
+                               format === '4x5' ? '4:5 (Portrait)' : 
+                               format === '16x9' ? '16:9 (Landscape)' : format}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
                 ))}
+              </div>
+              
+              {/* Selected Platforms Summary */}
+              <div className="mt-4 p-3 bg-surface-dark/30 rounded-lg">
+                <div className="text-xs text-text-secondary mb-2">არჩეული პლატფორმები:</div>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(enabledPlatforms).filter(([_, enabled]) => enabled).length === 0 ? (
+                    <span className="text-xs text-text-muted">არაფერი არჩეული</span>
+                  ) : (
+                    Object.entries(enabledPlatforms).filter(([_, enabled]) => enabled).map(([id]) => {
+                      const platform = SOCIAL_PLATFORMS.find(p => p.id === id);
+                      return (
+                        <span key={id} className="px-2 py-1 bg-primary/20 text-primary text-xs rounded-full">
+                          {platform?.name}: {selectedFormats[id]}
+                        </span>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
 

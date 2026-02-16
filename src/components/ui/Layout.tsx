@@ -15,16 +15,9 @@ const Layout: React.FC = () => {
           <div className="flex items-center space-x-4">
             <div className="w-16 h-16 relative flex items-center justify-center">
                <img
-                 src="/src/assets/logo.jpg"
+                 src="/src/assets/logo-main.jpg"
                  alt="Lumina Vids Logo"
-                 className="w-full h-full object-contain drop-shadow-lg"
-                 onError={(e) => {
-                   if (e.currentTarget.src.endsWith('/src/assets/logo.jpg')) {
-                     e.currentTarget.src = '/src/assets/logo.png';
-                     return;
-                   }
-                   e.currentTarget.src = '/src/assets/logo.svg';
-                 }}
+                 className="w-full h-full object-contain drop-shadow-lg rounded-lg"
                />
             </div>
             <div className="flex flex-col leading-none">
