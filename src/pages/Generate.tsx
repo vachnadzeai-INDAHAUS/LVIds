@@ -736,17 +736,16 @@ const Generate: React.FC = () => {
                         : 'bg-surface-dark/50 border-surface-light'
                     }`}
                   >
-                    {/* Header: Logo Image + Name + Toggle */}
-                    <div className="flex items-center justify-between mb-3">
+                    {/* Header: Icon + Name + Toggle */}
+                    <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center">
-                        <div className="w-14 h-14 rounded-xl mr-4 overflow-hidden border-3 border-primary/50 shadow-2xl bg-white ring-2 ring-white/20">
-                          <img 
-                            src={`/src/assets/logo-${platform.id}.jpg`}
-                            alt={platform.name}
-                            className="w-full h-full object-cover"
-                          />
+                        <div 
+                          className="w-8 h-8 rounded-full flex items-center justify-center mr-3"
+                          style={{ backgroundColor: platform.color }}
+                        >
+                          <platform.icon size={16} className="text-white" />
                         </div>
-                        <div className="text-base font-bold text-text-primary">{platform.name}</div>
+                        <div className="text-sm font-medium text-text-primary">{platform.name}</div>
                       </div>
                       {/* Toggle Switch */}
                       <button

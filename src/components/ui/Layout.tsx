@@ -11,13 +11,13 @@ const Layout: React.FC = () => {
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 h-16 bg-[#1F2937] border-b border-[#374151] z-50 flex items-center px-4">
         <div className="w-full flex justify-between items-center">
-          {/* Left: Logo (BIGGER as requested) */}
-          <div className="flex items-center space-x-5">
-            <div className="relative flex items-center justify-center rounded-2xl overflow-hidden border-4 border-[#FF8A1F] shadow-2xl bg-white ring-4 ring-[#FF8A1F]/20">
+          {/* Left: Logo */}
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 relative flex items-center justify-center">
                <img
                  src="/src/assets/logo-main.jpg"
                  alt="Lumina Vids Logo"
-                 className="object-contain max-h-20 max-w-20"
+                 className="w-full h-full object-contain drop-shadow-lg rounded-lg"
                />
             </div>
             <div className="flex flex-col leading-none">
