@@ -79,7 +79,7 @@ const SAMPLE_MUSIC = Array.from({ length: 30 }, (_, i) => ({
 const Generate: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const MAX_IMAGES = 20;
+  const MAX_IMAGES = 100;
   const [files, setFiles] = useState<FileItem[]>([]);
   const [draggedItem, setDraggedItem] = useState<number | null>(null);
   const [settings, setSettings] = useState<JobSettings>({
