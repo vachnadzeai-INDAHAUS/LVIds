@@ -301,12 +301,23 @@ const Generate: React.FC = () => {
   }, [jobId, status]);
 
   const startJob = async () => {
-    if (files.length === 0) return;
+    console.log('🚀 startJob called');
+    console.log('📁 files:', files.length);
+    console.log('📱 platforms:', enabledPlatforms);
+    
+    if (files.length === 0) {
+      setErrorMessage('გთხოვთ ატვირთოთ მინიმუმ 1 სურათი');
+      console.log('❌ No files');
+      return;
+    }
     
     // Check if at least one platform is enabled
     const hasEnabledPlatform = Object.values(enabledPlatforms).some(enabled => enabled);
+    console.log('✅ hasEnabledPlatform:', hasEnabledPlatform);
+    
     if (!hasEnabledPlatform) {
-      setErrorMessage('გთხოვთ აირჩიოთ მინიმუმ ერთი სოციალური ქსელი');
+      setErrorMessage('⚠️ გთხოვთ აირჩიოთ მინიმუმ ერთი სოციალური ქსელი (TikTok, Instagram, Facebook, ან YouTube)');
+      console.log('❌ No platform selected');
       return;
     }
     
@@ -314,6 +325,7 @@ const Generate: React.FC = () => {
     setErrorMessage(null);
     setProgress({});
     setResultFiles([]);
+    console.log('✅ Job started!');
     
     const formData = new FormData();
     files.forEach(f => formData.append('images', f.file));
@@ -1089,18 +1101,37 @@ const Generate: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <button 
-                className={`w-full mt-6 flex items-center justify-center py-3 text-lg font-semibold rounded-lg transition-all ${
-                  files.length === 0 
-                    ? 'bg-surface-light text-text-muted cursor-not-allowed' 
-                    : 'bg-primary hover:bg-primary-dark text-white'
-                }`}
-                onClick={startJob}
-                disabled={files.length === 0}
-              >
-                <Play className="mr-2" fill="currentColor" size={20} />
-                {t('generate.btn_generate') || 'ვიდეოს გენერაცია'}
-              </button>
+              <div className="mt-6">
+                {/* Validation Messages */}
+                {files.length === 0 && (
+                  <div className="mb-3 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-yellow-400 text-xs text-center">
+                    ⚠️ ატვირთეთ სურათები რომ დაიწყოთ გენერაცია
+                  </div>
+                )}
+                {files.length > 0 && !Object.values(enabledPlatforms).some(enabled => enabled) && (
+                  <div className="mb-3 p-2 bg-orange-500/10 border border-orange-500/30 rounded text-orange-400 text-xs text-center">
+                    ⚠️ აირჩიეთ მინიმუმ ერთი სოციალური ქსელი
+                  </div>
+                )}
+                
+                <button 
+                  className={`w-full flex items-center justify-center py-3 text-lg font-semibold rounded-lg transition-all ${
+                    files.length === 0 || !Object.values(enabledPlatforms).some(enabled => enabled)
+                      ? 'bg-surface-light text-text-muted cursor-not-allowed' 
+                      : 'bg-primary hover:bg-primary-dark text-white shadow-lg hover:shadow-xl'
+                  }`}
+                  onClick={startJob}
+                  disabled={files.length === 0 || !Object.values(enabledPlatforms).some(enabled => enabled)}
+                >
+                  <Play className="mr-2" fill="currentColor" size={20} />
+                  {files.length === 0 
+                    ? 'სურათები არ არის' 
+                    : !Object.values(enabledPlatforms).some(enabled => enabled)
+                      ? 'პლატფორმა არ არის არჩეული'
+                      : (t('generate.btn_generate') || 'ვიდეოს გენერაცია')
+                  }
+                </button>
+              </div>
             )}
 
             {status === 'done' && (
