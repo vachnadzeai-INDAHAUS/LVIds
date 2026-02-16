@@ -739,11 +739,13 @@ const Generate: React.FC = () => {
                     {/* Header: Logo Image + Name + Toggle */}
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center">
-                        <img 
-                          src={`/src/assets/logo-${platform.id}.jpg`}
-                          alt={platform.name}
-                          className="w-10 h-10 rounded-lg object-cover mr-3 shadow-md"
-                        />
+                        <div className="w-10 h-10 rounded-lg mr-3 overflow-hidden border-2 border-surface-light shadow-lg bg-white">
+                          <img 
+                            src={`/src/assets/logo-${platform.id}.jpg`}
+                            alt={platform.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
                         <div className="text-sm font-medium text-text-primary">{platform.name}</div>
                       </div>
                       {/* Toggle Switch */}
