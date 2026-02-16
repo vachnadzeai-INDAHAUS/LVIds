@@ -225,37 +225,79 @@ def create_text_overlay(clip, textOverlay, width, height):
     return clip
 
 def add_platform_label(clip, platform_name, width, height):
-    """Add platform label at top of video"""
-    from moviepy.editor import TextClip
+    """Add platform logo at top of video"""
+    from moviepy.editor import ImageClip
+    import os
+    
+    print(f"DEBUG add_platform_label: platform_name={platform_name}, size={width}x{height}")
     
     if not platform_name:
+        print("DEBUG: No platform name, skipping label")
         return clip
     
-    # Create text label
-    label_text = platform_name.upper()
+    # Map platform names to logo files
+    platform_to_logo = {
+        'TIKTOK': 'logo-tiktok.jpg',
+        'INSTAGRAM': 'logo-instagram.jpg',
+        'FACEBOOK': 'logo-facebook.jpg',
+        'YOUTUBE': 'logo-youtube.jpg'
+    }
     
-    # Calculate font size based on video height
-    font_size = int(height * 0.05)  # 5% of video height
+    # Handle multiple platforms (e.g., "TIKTOK + INSTAGRAM")
+    platforms = [p.strip() for p in platform_name.split('+')]
+    logo_clips = []
+    
+    for platform in platforms:
+        logo_file = platform_to_logo.get(platform)
+        if not logo_file:
+            continue
+            
+        logo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'src', 'assets', logo_file)
+        if not os.path.exists(logo_path):
+            logo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'public', logo_file)
+        
+        if not os.path.exists(logo_path):
+            print(f"DEBUG: Logo not found at {logo_path}")
+            continue
+        
+        try:
+            # Logo size: 8% of video width
+            logo_width = int(width * 0.08)
+            logo_height = int(logo_width)  # Square logos
+            
+            logo_clip = ImageClip(logo_path).set_duration(clip.duration)
+            logo_clip = logo_clip.resize((logo_width, logo_height))
+            
+            logo_clips.append(logo_clip)
+            print(f"DEBUG: Added logo for {platform}")
+        except Exception as e:
+            print(f"DEBUG: Error loading logo for {platform}: {e}")
+    
+    if not logo_clips:
+        print("DEBUG: No logos to add")
+        return clip
     
     try:
-        txt_clip = TextClip(
-            label_text,
-            fontsize=font_size,
-            color='white',
-            font='Arial-Bold',
-            stroke_color='black',
-            stroke_width=2,
-            method='caption'
-        ).set_duration(clip.duration)
-        
-        # Position at top center
-        txt_clip = txt_clip.set_position(('center', height * 0.02))
+        # Position logos at top center
+        if len(logo_clips) == 1:
+            # Single logo - center
+            logo_clips[0] = logo_clips[0].set_position(('center', height * 0.02))
+        else:
+            # Multiple logos - spread horizontally
+            total_width = sum([lc.size[0] for lc in logo_clips]) + (len(logo_clips) - 1) * 20
+            start_x = (width - total_width) // 2
+            current_x = start_x
+            for i, lc in enumerate(logo_clips):
+                logo_clips[i] = lc.set_position((current_x, height * 0.02))
+                current_x += lc.size[0] + 20
         
         # Composite with original clip
-        final = CompositeVideoClip([clip, txt_clip], size=(width, height))
+        all_clips = [clip] + logo_clips
+        final = CompositeVideoClip(all_clips, size=(width, height))
+        print(f"DEBUG: Successfully added {len(logo_clips)} logo(s)")
         return final
     except Exception as e:
-        print(f"Warning: Could not add platform label: {e}")
+        print(f"Warning: Could not add platform logo: {e}")
         return clip
 
 def generate_format(fmt_key, dimensions, images, temp_base, property_id, output_dir, settings, platform_name=None):
@@ -267,6 +309,9 @@ def generate_format(fmt_key, dimensions, images, temp_base, property_id, output_
     music_volume = float(settings.get("musicVolume", 0.5))
     trans_duration = float(settings.get("transitionDuration", 0.8))
     text_overlay = settings.get("textOverlay", {})
+    
+    # DEBUG
+    print(f"DEBUG generate_format: fmt_key={fmt_key}, platform_name={platform_name}")
     
     if duration <= trans_duration:
         trans_duration = duration / 2
@@ -446,9 +491,15 @@ def generate_slideshow(images, property_id, output_dir, settings):
     temp_base = os.path.join(output_dir, "temp_proc")
     os.makedirs(temp_base, exist_ok=True)
     
+    # DEBUG: Print what we received
+    print(f"DEBUG: Settings received: {json.dumps(settings, indent=2)}")
+    
     # Get platforms and formats from settings
     platforms = settings.get("platforms", {})
     selected_formats = settings.get("formats", {})
+    
+    print(f"DEBUG: platforms={platforms}")
+    print(f"DEBUG: selected_formats={selected_formats}")
     
     # Map formats to platform names
     format_to_platform = {}
