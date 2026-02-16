@@ -117,8 +117,20 @@ const Generate: React.FC = () => {
     { name: 'black', value: '#000000' },
     { name: 'orange', value: '#F97316' },
     { name: 'red', value: '#EF4444' },
-    { name: 'green', value: '#22C55E' }
+    { name: 'green', value: '#22C55E' },
+    { name: 'sky', value: '#0EA5E9' },
+    { name: 'gray', value: '#6B7280' },
+    { name: 'maroon', value: '#800000' }
   ];
+
+  // Outro Videos
+  const OUTRO_VIDEOS = Array.from({ length: 6 }, (_, i) => ({
+    id: `outro_${i + 1}`,
+    name: `Video ${i + 1}`,
+    preview: null // Placeholder
+  }));
+  
+  const [selectedOutro, setSelectedOutro] = useState<string | null>(null);
   
   const [transitionDuration, setTransitionDuration] = useState(0.8);
   const [isMusicEnabled, setIsMusicEnabled] = useState(false);
@@ -250,7 +262,7 @@ const Generate: React.FC = () => {
       font: selectedFont,
       rooms: propertyRooms,
       area: propertyArea,
-      position: textPositionTop ? 'top-left' : 'bottom-left' // Simplify logic for now
+      // Position is already fully managed in textOverlay state now
     };
     formData.append('textOverlay', JSON.stringify(overlayData));
     
@@ -292,95 +304,178 @@ const Generate: React.FC = () => {
     'orange': 'text-primary'
   };
 
-  const positionClasses = {
-    'bottom-left': 'items-start',
-    'bottom-center': 'items-center',
-    'bottom-right': 'items-end'
-  };
+    // Position mapping helper
+    const getPreviewStyle = (pos: string) => {
+      const [v, h] = pos.split('-');
+      const style: React.CSSProperties = { position: 'absolute', pointerEvents: 'none' };
+      
+      if (v === 'top') style.top = '10%';
+      else style.bottom = '10%';
+      
+      if (h === 'left') { style.left = '5%'; style.textAlign = 'left'; }
+      else if (h === 'right') { style.right = '5%'; style.textAlign = 'right'; }
+      else { style.left = '50%'; style.transform = 'translateX(-50%)'; style.textAlign = 'center'; }
+      
+      return style;
+    };
 
-  return (
-    <div className="flex flex-col lg:flex-row gap-4 w-full px-0 items-start">
+    return (
+      <div className="flex flex-col lg:flex-row gap-4 w-full px-0 items-start">
       
       {/* COLUMN 1: Text Overlay Settings (Left) - Wider Width */}
       <div className="w-full lg:w-[380px] shrink-0">
         <div className="bg-surface rounded-xl border border-surface-light p-5 h-fit">
-           <h3 className="text-sm font-medium text-text-secondary flex items-center mb-6">
-             <Type className="mr-2" size={16} />
-             ტექსტური პარამეტრები
-           </h3>
+           <div className="flex items-center justify-between mb-6">
+             <h3 className="text-lg font-bold text-text-primary flex items-center">
+               <Type className="mr-2" size={20} />
+               ტექსტური განყოფილება
+             </h3>
+             <button 
+               className={`w-12 h-6 rounded-full relative transition-colors ${textOverlay.enabled ? 'bg-primary' : 'bg-surface-light'}`}
+               onClick={() => setTextOverlay({...textOverlay, enabled: !textOverlay.enabled})}
+             >
+               <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${textOverlay.enabled ? 'left-7' : 'left-1'}`} />
+             </button>
+           </div>
            
-           <div className="space-y-6">
+           <div className={`space-y-6 transition-all duration-300 ${!textOverlay.enabled ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
              {/* Font Selection */}
              <div>
-               <label className="text-xs text-text-muted mb-2 block">ფონტის არჩევა</label>
-               <select 
-                 className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-primary"
-                 value={selectedFont}
-                 onChange={(e) => setSelectedFont(e.target.value)}
-               >
-                 {FONTS.map(font => (
-                   <option key={font} value={font}>{font}</option>
-                 ))}
-               </select>
-             </div>
-
-             {/* Visuals */}
-             <div>
-               <label className="text-xs text-text-muted mb-2 block">ვიზუალი</label>
-               <div className="flex justify-between items-center mb-3">
-                 <div className="flex gap-2">
-                   {TEXT_COLORS.map((c) => (
-                     <button
-                       key={c.name}
-                       onClick={() => setTextOverlay({...textOverlay, color: c.name as any})}
-                       className={`w-8 h-8 rounded-full border-2 transition-all ${
-                         textOverlay.color === c.name ? 'border-primary scale-110' : 'border-surface-light'
-                       }`}
-                       style={{ backgroundColor: c.value }}
-                       title={c.name}
-                     />
-                   ))}
+               <label className="text-sm font-semibold text-text-secondary mb-2 block">ფონტის არჩევა</label>
+               <div className="relative">
+                 <select 
+                   className="w-full bg-surface-dark border border-surface-light rounded-lg px-4 py-3 text-text-primary focus:outline-none focus:border-primary appearance-none cursor-pointer"
+                   value={selectedFont}
+                   onChange={(e) => setSelectedFont(e.target.value)}
+                   style={{ fontFamily: selectedFont }}
+                 >
+                   {FONTS.map(font => {
+                      // Font Name Localization
+                      let displayName = font;
+                      if (t('nav.generate') === 'გენერაცია') { // Check if Georgian
+                        const kaMap: Record<string, string> = {
+                          'Fira GO': 'ფირა GO', 'Montserrat': 'მონსერატი', 'Oswald': 'ოსვალდი', 
+                          'Noto Sans Georgian': 'ნოტო სანსი', 'Inter': 'ინტერი', 'Playfair Display': 'ფლეიფეარი',
+                          'Ubuntu': 'უბუნტუ', 'Kanit': 'კანიტი', 'Roboto': 'რობოტო', 'Lora': 'ლორა',
+                          'Exo 2': 'ეგზო 2', 'Arimo': 'არიმო', 'Tinos': 'ტინოსი', 'Merriweather': 'მერივეზერი',
+                          'Noto Serif Georgian': 'ნოტო სერიფი'
+                        };
+                        displayName = kaMap[font] || font;
+                      }
+                      return (
+                        <option key={font} value={font} style={{ fontFamily: font }}>
+                          {displayName}
+                        </option>
+                      );
+                   })}
+                 </select>
+                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-muted">
+                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                  </div>
                </div>
-               
-               <div className="flex items-center justify-between bg-surface-dark p-3 rounded-lg border border-surface-light">
-                 <span className="text-sm text-text-secondary">წარწერა ზემოთ</span>
-                 <button 
-                   className={`w-10 h-5 rounded-full relative transition-colors ${textPositionTop ? 'bg-primary' : 'bg-surface-light'}`}
-                   onClick={() => setTextPositionTop(!textPositionTop)}
-                 >
-                   <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${textPositionTop ? 'left-6' : 'left-1'}`} />
-                 </button>
-               </div>
              </div>
 
-             {/* Property Details */}
-             <div className="grid grid-cols-2 gap-3">
-               <div>
-                 <label className="text-xs text-text-muted mb-1 block">ოთახები</label>
-                 <input 
-                   type="number" 
-                   className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-primary"
-                   placeholder="მაგ: 3"
-                   value={propertyRooms}
-                   onChange={e => setPropertyRooms(e.target.value)}
-                 />
-               </div>
-               <div>
-                 <label className="text-xs text-text-muted mb-1 block">კვადრატულობა (m²)</label>
-                 <input 
-                   type="number" 
-                   className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-primary"
-                   placeholder="მაგ: 85"
-                   value={propertyArea}
-                   onChange={e => setPropertyArea(e.target.value)}
-                 />
-               </div>
-             </div>
-
-             {/* Price */}
+             {/* Visuals (Collapsible Color Picker) */}
              <div>
-               <label className="text-xs text-text-muted mb-1 block">ფასი</label>
+               <details className="group border border-surface-light rounded-lg bg-surface-dark open:bg-surface-dark/50 transition-all" open>
+                 <summary className="flex items-center justify-between p-3 cursor-pointer list-none select-none">
+                   <div className="flex items-center">
+                     <Palette size={16} className="mr-2 text-text-secondary" />
+                     <span className="text-sm font-medium text-text-secondary">ფერები & პოზიცია</span>
+                   </div>
+                   <div className="flex items-center">
+                     <div 
+                       className="w-4 h-4 rounded-md border border-surface-light mr-2"
+                       style={{ backgroundColor: TEXT_COLORS.find(c => c.name === textOverlay.color)?.value || '#FFF' }}
+                     />
+                     <svg className="w-4 h-4 text-text-muted group-open:rotate-180 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                   </div>
+                 </summary>
+                 <div className="p-3 pt-0 border-t border-surface-light/50 mt-2">
+                   {/* Colors */}
+                   <div className="flex flex-wrap gap-2 mb-4 pt-2">
+                     {TEXT_COLORS.map((c) => (
+                       <button
+                         key={c.name}
+                         onClick={() => setTextOverlay({...textOverlay, color: c.name as any})}
+                         className={`w-8 h-8 rounded-md border-2 transition-all ${
+                           textOverlay.color === c.name ? 'border-primary scale-110 ring-2 ring-primary/20' : 'border-surface-light hover:border-primary/50'
+                         }`}
+                         style={{ backgroundColor: c.value }}
+                         title={c.name}
+                       />
+                     ))}
+                   </div>
+                   
+                   {/* Position Control */}
+                   <div className="space-y-2">
+                      {/* Vertical */}
+                      <div className="grid grid-cols-2 gap-2 bg-surface p-1 rounded-lg">
+                        <button 
+                          className={`text-xs py-1.5 rounded-md transition-all ${textOverlay.position.startsWith('top') ? 'bg-primary text-white shadow' : 'text-text-secondary hover:bg-surface-light'}`}
+                          onClick={() => {
+                             const align = textOverlay.position.split('-')[1] || 'left';
+                             setTextOverlay({...textOverlay, position: `top-${align}` as any});
+                          }}
+                        >
+                          წარწერა ზემოთ
+                        </button>
+                        <button 
+                          className={`text-xs py-1.5 rounded-md transition-all ${textOverlay.position.startsWith('bottom') ? 'bg-primary text-white shadow' : 'text-text-secondary hover:bg-surface-light'}`}
+                          onClick={() => {
+                             const align = textOverlay.position.split('-')[1] || 'left';
+                             setTextOverlay({...textOverlay, position: `bottom-${align}` as any});
+                          }}
+                        >
+                          წარწერა ქვემოთ
+                        </button>
+                      </div>
+
+                      {/* Horizontal */}
+                      <div className="grid grid-cols-3 gap-1 bg-surface p-1 rounded-lg">
+                        {['left', 'center', 'right'].map((align) => (
+                          <button 
+                            key={align}
+                            className={`text-xs py-1.5 rounded-md transition-all capitalize ${textOverlay.position.includes(align) ? 'bg-surface-light text-primary font-bold border border-primary/30' : 'text-text-muted hover:text-text-secondary'}`}
+                            onClick={() => {
+                               const vert = textOverlay.position.split('-')[0] || 'bottom';
+                               setTextOverlay({...textOverlay, position: `${vert}-${align}` as any});
+                            }}
+                          >
+                            {align === 'left' ? 'მარცხნივ' : align === 'center' ? 'ცენტრი' : 'მარჯვნივ'}
+                          </button>
+                        ))}
+                      </div>
+                   </div>
+                 </div>
+               </details>
+             </div>
+
+             {/* Property Details - Stacked like Price/Phone */}
+             <div>
+               <label className="text-xs font-medium text-text-muted mb-1 block">ოთახები</label>
+               <input 
+                 type="text" 
+                 className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-primary placeholder-text-muted"
+                 placeholder="მაგ: 3"
+                 value={propertyRooms}
+                 onChange={e => setPropertyRooms(e.target.value)}
+               />
+             </div>
+             <div>
+               <label className="text-xs font-medium text-text-muted mb-1 block">კვადრატულობა (m²)</label>
+               <input 
+                 type="text" 
+                 className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-primary placeholder-text-muted"
+                 placeholder="მაგ: 85"
+                 value={propertyArea}
+                 onChange={e => setPropertyArea(e.target.value)}
+               />
+             </div>
+
+             {/* Price - Row 2 */}
+             <div>
+               <label className="text-xs font-medium text-text-muted mb-1 block">ფასი</label>
                <input 
                  type="text" 
                  className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary placeholder-text-muted focus:outline-none focus:border-primary"
@@ -390,9 +485,9 @@ const Generate: React.FC = () => {
                />
              </div>
 
-             {/* Contact */}
+             {/* Contact - Row 3 */}
              <div>
-               <label className="text-xs text-text-muted mb-1 block">ტელეფონი</label>
+               <label className="text-xs font-medium text-text-muted mb-1 block">ტელეფონი</label>
                <input 
                  type="text" 
                  className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary placeholder-text-muted focus:outline-none focus:border-primary"
@@ -400,6 +495,34 @@ const Generate: React.FC = () => {
                  value={textOverlay.phone}
                  onChange={e => setTextOverlay({...textOverlay, phone: e.target.value})}
                />
+             </div>
+             
+             {/* Outro Section (Sareklamo Qudis Ganyofileba) */}
+             <div className="pt-4 border-t border-surface-light mt-4">
+                <h3 className="text-sm font-bold text-text-primary mb-3">სარეკლამო ქუდის განყოფილება</h3>
+                <div className="grid grid-cols-3 gap-2">
+                  {OUTRO_VIDEOS.map((outro) => (
+                    <button
+                      key={outro.id}
+                      onClick={() => setSelectedOutro(selectedOutro === outro.id ? null : outro.id)}
+                      className={`aspect-video rounded-lg border-2 flex items-center justify-center relative overflow-hidden transition-all ${
+                        selectedOutro === outro.id 
+                          ? 'border-primary bg-primary/10' 
+                          : 'border-surface-light bg-surface-dark hover:border-primary/50'
+                      }`}
+                    >
+                      <span className="text-xs text-text-muted">{outro.name}</span>
+                      {selectedOutro === outro.id && (
+                        <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                          <div className="bg-primary text-white rounded-full p-0.5">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          </div>
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-text-muted mt-2 text-center">აირჩიეთ დასასრული ვიდეო</p>
              </div>
            </div>
         </div>
@@ -451,6 +574,24 @@ const Generate: React.FC = () => {
                      }`}
                    >
                      <img src={file.preview} alt={file.file.name} className="w-full h-full object-contain" />
+                     
+                     {/* Text Overlay Preview */}
+                     {textOverlay.enabled && (
+                       <div 
+                         className="absolute w-[90%] text-[8px] leading-tight z-10"
+                         style={{ 
+                            ...getPreviewStyle(textOverlay.position),
+                            color: TEXT_COLORS.find(c => c.name === textOverlay.color)?.value || 'white',
+                            fontFamily: selectedFont,
+                            textShadow: '1px 1px 2px rgba(0,0,0,0.8)'
+                         }}
+                       >
+                         <div>{textOverlay.title || 'სათაური'}</div>
+                         <div className="text-[10px] font-bold">{textOverlay.price || '$150k'}</div>
+                         <div>{textOverlay.phone || '599...'}</div>
+                       </div>
+                     )}
+
                      <div className="absolute top-1 left-1 bg-black/50 text-white rounded p-1 opacity-0 group-hover:opacity-100">
                        <GripVertical size={12} />
                      </div>
