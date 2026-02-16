@@ -815,15 +815,17 @@ const Generate: React.FC = () => {
                 </label>
               </div>
               
-              {/* VISUAL PREVIEW BOX - Shows actual transition */}
+              {/* VISUAL PREVIEW BOX - Shows actual transition with real images */}
               <div className="mb-4 bg-surface-dark rounded-xl p-4 border border-surface-light">
                 <div className="text-xs text-text-secondary mb-2 text-center">
                   Preview: {hoveredTransition ? t(`generate.transition_${hoveredTransition}`) : t(`generate.transition_${settings.transition}`)}
                 </div>
-                <div className="relative w-full h-32 bg-surface rounded-lg overflow-hidden flex items-center justify-center">
+                <div className="relative w-full h-40 bg-surface rounded-lg overflow-hidden">
                   {/* Image 1 (Background) - Default visible */}
-                  <div 
-                    className={`absolute inset-4 bg-gradient-to-br from-blue-500/30 to-blue-600/10 rounded-lg flex items-center justify-center transition-all duration-500 ${
+                  <img 
+                    src="/preview/image1.jpg"
+                    alt="Image 1"
+                    className={`absolute inset-0 w-full h-full object-cover transition-all duration-500 ${
                       hoveredTransition === 'fade' ? 'opacity-0' :
                       hoveredTransition === 'slide_left' ? '-translate-x-full' :
                       hoveredTransition === 'slide_right' ? 'translate-x-full' :
@@ -836,14 +838,13 @@ const Generate: React.FC = () => {
                       hoveredTransition ? 'opacity-30' : 'opacity-100'
                     }`}
                     style={{ transitionTimingFunction: 'ease-in-out' }}
-                  >
-                    <span className="text-4xl">🖼️</span>
-                    <span className="absolute bottom-2 text-xs text-text-secondary bg-black/50 px-2 rounded">Image 1</span>
-                  </div>
+                  />
                   
                   {/* Image 2 (Foreground) - Default hidden, slides in on hover */}
-                  <div 
-                    className={`absolute inset-4 bg-gradient-to-br from-primary to-primary/80 rounded-lg flex items-center justify-center transition-all duration-500 ${
+                  <img 
+                    src="/preview/image2.jpg"
+                    alt="Image 2"
+                    className={`absolute inset-0 w-full h-full object-cover transition-all duration-500 ${
                       hoveredTransition === 'fade' ? 'opacity-100' :
                       hoveredTransition === 'slide_left' ? 'translate-x-0' :
                       hoveredTransition === 'slide_right' ? 'translate-x-0' :
@@ -853,7 +854,7 @@ const Generate: React.FC = () => {
                       hoveredTransition === 'zoom_out' ? 'scale-100 opacity-100' :
                       hoveredTransition === 'spin_in' ? 'rotate-0 opacity-100' :
                       hoveredTransition === 'spin_out' ? 'rotate-0 opacity-100' :
-                      'translate-x-full'
+                      'opacity-0'
                     }`}
                     style={{
                       transform: hoveredTransition === null ? 'translateX(100%)' :
@@ -868,10 +869,7 @@ const Generate: React.FC = () => {
                                 'translateX(100%)',
                       opacity: hoveredTransition === null ? '0' : undefined
                     }}
-                  >
-                    <span className="text-4xl">🎬</span>
-                    <span className="absolute bottom-2 text-xs text-white font-bold bg-black/50 px-2 rounded">Image 2</span>
-                  </div>
+                  />
                   
                   {/* Transition Icon Overlay */}
                   {hoveredTransition && (
