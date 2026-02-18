@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Download, Folder, FileVideo, Archive, Youtube, Instagram, Facebook, Video, Film } from 'lucide-react';
-import { useLanguage } from '../i18n/LanguageContext';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Download, Archive, Youtube, Instagram, Facebook, Video, Film } from 'lucide-react';
+import { useLanguage } from '../i18n/useLanguage';
 
 interface Job {
   jobId: string;
@@ -11,39 +11,62 @@ interface Job {
   hasZip: boolean;
 }
 
+interface JobDetails {
+  jobId: string;
+  propertyId?: string;
+  status: string;
+  error?: string;
+  zipFile?: string;
+  files?: string[];
+}
+
 const Outputs: React.FC = () => {
   const { t } = useLanguage();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-  const [selectedJobDetails, setSelectedJobDetails] = useState<any>(null);
+  const [selectedJobDetails, setSelectedJobDetails] = useState<JobDetails | null>(null);
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'done':
+        return t('outputs.status_done');
+      case 'error':
+        return t('outputs.status_error');
+      case 'queued':
+        return t('outputs.status_queued');
+      case 'running':
+        return t('outputs.status_rendering');
+      case 'canceled':
+        return t('outputs.status_canceled');
+      default:
+        return status;
+    }
+  };
 
-  useEffect(() => {
-    fetchJobs();
-    const interval = setInterval(fetchJobs, 5000);
-    return () => clearInterval(interval);
+  const fetchJobs = useCallback(async () => {
+    try {
+      const res = await fetch('/api/jobs');
+      const data = (await res.json()) as Job[];
+      setJobs(data);
+      setSelectedJobId((current) => current ?? data[0]?.jobId ?? null);
+    } catch (e) {
+      console.error(e);
+    }
   }, []);
 
   useEffect(() => {
     if (selectedJobId) {
       fetch(`/api/jobs/${selectedJobId}`)
         .then(res => res.json())
-        .then(data => setSelectedJobDetails(data))
+        .then(data => setSelectedJobDetails(data as JobDetails))
         .catch(err => console.error(err));
     }
   }, [selectedJobId]);
 
-  const fetchJobs = async () => {
-    try {
-      const res = await fetch('/api/jobs');
-      const data = await res.json();
-      setJobs(data);
-      if (!selectedJobId && data.length > 0) {
-        setSelectedJobId(data[0].jobId);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  useEffect(() => {
+    fetchJobs();
+    const interval = setInterval(fetchJobs, 5000);
+    return () => clearInterval(interval);
+  }, [fetchJobs]);
 
   const getIconForFile = (filename: string) => {
     // 9x16 -> TikTok
@@ -93,14 +116,6 @@ const Outputs: React.FC = () => {
     return <Film size={24} />;
   };
 
-  const getFormatLabel = (filename: string) => {
-    if (filename.includes('9x16')) return 'Shorts / Reels (9:16)';
-    if (filename.includes('1x1')) return 'Post Square (1:1)';
-    if (filename.includes('4x5')) return 'Post Portrait (4:5)';
-    if (filename.includes('16x9')) return 'Landscape (16:9)';
-    return filename;
-  };
-
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-8rem)]">
       {/* Sidebar List */}
@@ -125,7 +140,7 @@ const Outputs: React.FC = () => {
                     job.status === 'error' ? 'bg-red-500/20 text-red-400' :
                     'bg-blue-500/20 text-blue-400'
                   }`}>
-                    {job.status}
+                    {getStatusLabel(job.status)}
                   </span>
                 </div>
                 <div className="text-xs text-[#9CA3AF]">
@@ -145,7 +160,7 @@ const Outputs: React.FC = () => {
             <div className="card flex justify-between items-center">
                <div>
                  <h2 className="text-2xl font-bold text-[#E5E7EB]">{selectedJobDetails.propertyId || selectedJobDetails.jobId}</h2>
-                 <p className="text-[#9CA3AF] text-sm mt-1">{t('outputs.status_label')} {selectedJobDetails.status}</p>
+                 <p className="text-[#9CA3AF] text-sm mt-1">{t('outputs.status_label')} {getStatusLabel(selectedJobDetails.status)}</p>
                  {selectedJobDetails.error && (
                    <p className="text-red-400 text-sm mt-1">{selectedJobDetails.error}</p>
                  )}
@@ -186,7 +201,7 @@ const Outputs: React.FC = () => {
                         href={`/api/jobs/${selectedJobId}/download/${file}`}
                         className="w-full flex items-center justify-center bg-[#374151] hover:bg-[#4B5563] text-white text-sm py-3 rounded transition-colors border border-[#4B5563]"
                       >
-                        <Download size={16} className="mr-2" /> Download
+                        <Download size={16} className="mr-2" /> {t('outputs.btn_download')}
                       </a>
                     </div>
                   </div>

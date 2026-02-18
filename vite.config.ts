@@ -26,19 +26,24 @@ export default defineConfig({
     tsconfigPaths(),
   ],
   server: {
+    port: Number(process.env.VITE_PORT ?? 5174),
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: `http://localhost:${process.env.API_PORT ?? process.env.PORT ?? 3002}`,
         changeOrigin: true,
         secure: false,
-        configure: (proxy, _options) => {
-          proxy.on('error', (err, _req, _res) => {
+        configure: (proxy) => {
+          proxy.on('error', (err, req, res) => {
+            void req
+            void res
             console.log('proxy error', err);
           });
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            void res
             console.log('Sending Request to the Target:', req.method, req.url);
           });
-          proxy.on('proxyRes', (proxyRes, req, _res) => {
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            void res
             console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
           });
         },

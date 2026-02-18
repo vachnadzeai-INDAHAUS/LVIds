@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertCircle, CheckCircle, Info } from 'lucide-react';
-import { useLanguage } from '../i18n/LanguageContext';
+import { useLanguage } from '../i18n/useLanguage';
 
 const Help: React.FC = () => {
   const { t } = useLanguage();

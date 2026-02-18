@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Video, Menu, HelpCircle, Globe } from 'lucide-react';
-import { useLanguage } from '../../i18n/LanguageContext';
+import { useLanguage } from '../../i18n/useLanguage';
 
 const Layout: React.FC = () => {
   const { t, language, setLanguage } = useLanguage();

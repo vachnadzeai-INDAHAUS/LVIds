@@ -1,8 +1,9 @@
 import express from 'express';
+import type { Request } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { spawn } from 'child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import archiver from 'archiver';
 import { v4 as uuidv4 } from 'uuid';
 import cors from 'cors';
@@ -29,10 +30,12 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR);
 if (!fs.existsSync(OUTPUTS_DIR)) fs.mkdirSync(OUTPUTS_DIR);
 
 // Multer Configuration
+type RequestWithJobId = Request & { jobId?: string };
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     // We attach jobId to req in the middleware before upload
-    const jobId = (req as any).jobId;
+    const jobId = (req as RequestWithJobId).jobId ?? 'unknown';
     console.log(`[Multer] Uploading file ${file.originalname} for job ${jobId}`);
     const jobDir = path.join(UPLOADS_DIR, jobId);
     if (!fs.existsSync(jobDir)) fs.mkdirSync(jobDir, { recursive: true });
@@ -48,18 +51,63 @@ const upload = multer({ storage: storage });
 // Types & State
 type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'canceled';
 
+type TextOverlay = {
+  enabled?: boolean;
+  text?: string;
+  title?: string;
+  price?: string;
+  phone?: string;
+  position?: string;
+  color?: string;
+  showLogo?: boolean;
+  font?: string;
+  fontFamily?: string;
+  fontKey?: string;
+  fontSizes?: {
+    title?: number;
+    price?: number;
+    phone?: number;
+  };
+  fontWeights?: {
+    title?: number;
+    price?: number;
+    phone?: number;
+  };
+  letterSpacing?: {
+    title?: number;
+    price?: number;
+    phone?: number;
+  };
+  lineHeight?: number;
+  lineGap?: number;
+  rooms?: string;
+  area?: string;
+};
+
+type JobSettings = {
+  fps?: number;
+  secondsPerImage?: number;
+  transition?: string;
+  musicVolume?: number;
+  transitionDuration?: number;
+  platforms?: Record<string, boolean>;
+  formats?: Record<string, string>;
+  musicFile?: string;
+  textOverlay?: TextOverlay;
+};
+
 interface Job {
   id: string;
   status: JobStatus;
   images: string[];
-  settings: any;
+  settings: JobSettings;
   propertyId: string;
   createdAt: number;
   outputDir: string;
   files?: string[];
   zipFile?: string;
   error?: string;
-  process?: any; 
+  process?: ChildProcessWithoutNullStreams; 
   progress?: Record<string, number>; // Store progress per format
 }
 
@@ -102,14 +150,15 @@ async function processQueue() {
     // In prod (packaged): resources/bin/generator.exe or similar
     const bundledExe = path.join(process.cwd(), 'api', 'bin', 'generator.exe');
     // process.resourcesPath might be undefined in child process, pass via env
-    const resPath = (process as any).resourcesPath || process.env.RESOURCES_PATH || '';
+    const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+    const resPath = resourcesPath ?? process.env.RESOURCES_PATH ?? '';
     const bundledExeProd = path.join(resPath, 'bin', 'generator.exe');
     
     // Debug log for paths
     console.log("CWD:", process.cwd());
     console.log("Bundled Exe Dev:", bundledExe);
     console.log("Bundled Exe Prod:", bundledExeProd);
-    console.log("Resources Path:", (process as any).resourcesPath);
+    console.log("Resources Path:", resourcesPath);
 
     let cmd = '';
     let args: string[] = [];
@@ -220,7 +269,9 @@ async function processQueue() {
                             result = parsed;
                             break;
                         }
-                    } catch (e) {}
+                    } catch (error) {
+                        void error;
+                    }
                 }
                 
                 if (result && result.status === 'success') {
@@ -274,17 +325,30 @@ function createZip(sourceDir: string, files: string[], outPath: string): Promise
 // 1. Create Job
 app.post('/api/generate', (req, res, next) => {
     const jobId = uuidv4();
-    (req as any).jobId = jobId;
+    (req as RequestWithJobId).jobId = jobId;
     next();
 }, upload.fields([{ name: 'images', maxCount: 100 }, { name: 'music', maxCount: 1 }]), (req, res) => {
     try {
-        const jobId = (req as any).jobId;
+        const jobId = (req as RequestWithJobId).jobId ?? uuidv4();
         const propertyId = req.body.propertyId || 'prop';
-        const settings = JSON.parse(req.body.settings || '{}');
-        const textOverlay = JSON.parse(req.body.textOverlay || '{}');
+        const settings = JSON.parse(req.body.settings || '{}') as JobSettings;
+        const textOverlay = JSON.parse(req.body.textOverlay || '{}') as TextOverlay;
+
+        const rawText = typeof textOverlay.text === 'string' ? textOverlay.text : '';
+        const sanitizedText = rawText.replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+        const limitedText = sanitizedText.length > 200 ? sanitizedText.slice(0, 200) : sanitizedText;
+        const normalizedTextOverlay: TextOverlay = {
+            ...textOverlay,
+            text: limitedText,
+            enabled: limitedText.length > 0 ? (textOverlay.enabled ?? true) : false
+        };
+        if (rawText && rawText !== limitedText) {
+            console.log(`[TextOverlay] text trimmed or limited: ${rawText.length} -> ${limitedText.length}`);
+        }
         
-        const files = (req.files as any)['images'] ? (req.files as any)['images'].map((f: any) => f.path) : [];
-        const musicFile = (req.files as any)['music'] ? (req.files as any)['music'][0].path : undefined;
+        const filesMap = req.files as Record<string, Express.Multer.File[]> | undefined;
+        const files = filesMap?.images?.map((file) => file.path) ?? [];
+        const musicFile = filesMap?.music?.[0]?.path;
         
         console.log("Uploaded files:", req.files);
         console.log("Image files:", files);
@@ -294,7 +358,7 @@ app.post('/api/generate', (req, res, next) => {
             id: jobId,
             status: 'queued',
             images: files,
-            settings: { ...settings, musicFile, textOverlay },
+            settings: { ...settings, musicFile, textOverlay: normalizedTextOverlay },
             propertyId,
             createdAt: Date.now(),
             outputDir: path.join(OUTPUTS_DIR, jobId)

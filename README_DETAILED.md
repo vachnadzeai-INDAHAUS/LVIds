@@ -2,7 +2,6 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-1.0.0-FF8C42?style=for-the-badge&logoColor=white" alt="Version">
-  <img src="https://img.shields.io/badge/license-MIT-6B7280?style=for-the-badge" alt="License">
   <img src="https://img.shields.io/badge/platform-Windows-FF8C42?style=for-the-badge&logo=windows&logoColor=white" alt="Platform">
   <img src="https://img.shields.io/badge/PRs-welcome-6B7280?style=for-the-badge" alt="PRs Welcome">
 </p>

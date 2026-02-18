@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Upload, X, Play, Settings as SettingsIcon, 
-  Music, Download, Volume2, VolumeX, Eye, 
+  Music, Download, Volume2, VolumeX, 
   GripVertical, Type, Image as ImageIcon, Palette,
   Monitor, Smartphone, Video, Plus, Minus
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useLanguage } from '../i18n/LanguageContext';
+import { useLanguage } from '../i18n/useLanguage';
 
 interface JobSettings {
   fps: number;
@@ -17,11 +17,9 @@ interface JobSettings {
 
 interface TextOverlay {
   enabled: boolean;
-  title: string;
-  price: string;
-  phone: string;
+  text: string;
   position: 'bottom-left' | 'bottom-center' | 'bottom-right';
-  color: 'white' | 'black' | 'orange';
+  color: 'white' | 'black' | 'orange' | 'red' | 'green' | 'sky' | 'gray' | 'maroon';
   showLogo: boolean;
 }
 
@@ -69,11 +67,32 @@ const TRANSITIONS = [
   { value: 'flip3d', labelKey: 'transition_flip3d', icon: '🃏', type: 'creative' },
 ];
 
+type FontOption = {
+  id: string;
+  labelKey: string;
+  css: string;
+  backend: string;
+};
+
+const FONT_OPTIONS: FontOption[] = [
+  { id: 'sans', labelKey: 'font_sans', css: "'Arial', 'Helvetica', sans-serif", backend: 'Arial' },
+  { id: 'serif', labelKey: 'font_serif', css: "'Times New Roman', 'Times', serif", backend: 'Times New Roman' },
+  { id: 'mono', labelKey: 'font_mono', css: "'Courier New', 'Courier', monospace", backend: 'Courier New' },
+  { id: 'script', labelKey: 'font_script', css: "'Comic Sans MS', 'Comic Sans', cursive", backend: 'Comic Sans MS' },
+  { id: 'display', labelKey: 'font_display', css: "'Impact', 'Haettenschweiler', sans-serif", backend: 'Impact' }
+];
+
+const TEXT_STYLE = {
+  title: { size: 60, weight: 600, letterSpacing: 0.5, lineHeight: 1.1 },
+  price: { size: 80, weight: 700, letterSpacing: 0.6, lineHeight: 1.05 },
+  phone: { size: 40, weight: 500, letterSpacing: 0.4, lineHeight: 1.1 },
+  lineGap: 12
+};
+
 const SAMPLE_MUSIC = Array.from({ length: 30 }, (_, i) => ({
   id: `track_${i + 1}`,
-  name: `Track ${i + 1} - ${['Pop', 'Rock', 'Ambient', 'Jazz', 'Electronic'][i % 5]}`,
   duration: '0:30',
-  genre: ['Pop', 'Rock', 'Ambient', 'Jazz', 'Electronic'][i % 5]
+  genreKey: ['pop', 'rock', 'ambient', 'jazz', 'electronic'][i % 5]
 }));
 
 const Generate: React.FC = () => {
@@ -83,8 +102,6 @@ const Generate: React.FC = () => {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [draggedItem, setDraggedItem] = useState<number | null>(null);
   const [hoveredTransition, setHoveredTransition] = useState<string | null>(null);
-  const [previewTransition, setPreviewTransition] = useState<string>('fade');
-  const [isPreviewPlaying, setIsPreviewPlaying] = useState<boolean>(false);
   const [settings, setSettings] = useState<JobSettings>({
     fps: 30,
     secondsPerImage: 3.2,
@@ -95,27 +112,25 @@ const Generate: React.FC = () => {
   // Text Overlay State
   const [textOverlay, setTextOverlay] = useState<TextOverlay>({
     enabled: true, // Default enabled for new layout
-    title: '',
-    price: '',
-    phone: '',
+    text: '',
     position: 'bottom-left',
     color: 'white',
     showLogo: false
   });
 
   // New state for extended settings
-  const [selectedFont, setSelectedFont] = useState('Fira GO');
+  const [selectedFontId, setSelectedFontId] = useState(FONT_OPTIONS[0].id);
   const [propertyRooms, setPropertyRooms] = useState('');
   const [propertyArea, setPropertyArea] = useState('');
-  const [textPositionTop, setTextPositionTop] = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareFonts, setCompareFonts] = useState<string[]>([
+    FONT_OPTIONS[0].id,
+    FONT_OPTIONS[1].id
+  ]);
+  const [previewWidth, setPreviewWidth] = useState(0);
+  const previewRef = useRef<HTMLDivElement | null>(null);
 
-  const FONTS = [
-    'Fira GO', 'Montserrat', 'Oswald', 'Noto Sans Georgian', 'Inter', 
-    'Playfair Display', 'Ubuntu', 'Kanit', 'Roboto', 'Lora', 
-    'Exo 2', 'Arimo', 'Tinos', 'Merriweather', 'Noto Serif Georgian'
-  ];
-
-  const TEXT_COLORS = [
+  const TEXT_COLORS: { name: TextOverlay['color']; value: string }[] = [
     { name: 'white', value: '#FFFFFF' },
     { name: 'black', value: '#000000' },
     { name: 'orange', value: '#F97316' },
@@ -148,7 +163,6 @@ const Generate: React.FC = () => {
   const [progress, setProgress] = useState<Record<string, number>>({});
   const [resultFiles, setResultFiles] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   
   // Platform selection state - which platforms are enabled and their formats
   const [enabledPlatforms, setEnabledPlatforms] = useState<Record<string, boolean>>({
@@ -163,6 +177,31 @@ const Generate: React.FC = () => {
     facebook: '1x1',
     youtube: '9x16'
   });
+
+  const selectedFont = FONT_OPTIONS.find(font => font.id === selectedFontId) ?? FONT_OPTIONS[0];
+  const previewText = textOverlay.text.trim();
+  const hasPreviewText = previewText.length > 0;
+  const previewSampleText = t('generate.font_sample_letter');
+  const previewScale = previewWidth > 0 ? previewWidth / 1080 : 0.2;
+  const getScaledSize = (size: number) => Math.max(8, Math.round(size * previewScale));
+  const getScaledLetterSpacing = (value: number) => `${(value * previewScale).toFixed(2)}px`;
+
+  useEffect(() => {
+    if (!previewRef.current) return;
+    const element = previewRef.current;
+    const observer = new ResizeObserver(entries => {
+      const entry = entries[0];
+      if (entry) setPreviewWidth(entry.contentRect.width);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!compareMode) return;
+    if (compareFonts.length >= 2) return;
+    setCompareFonts([FONT_OPTIONS[0].id, FONT_OPTIONS[1].id]);
+  }, [compareMode, compareFonts.length]);
 
   const togglePlatform = (id: string) => {
     setEnabledPlatforms(prev => ({
@@ -188,29 +227,6 @@ const Generate: React.FC = () => {
     }
   };
 
-  const handlePlatformSelect = (id: string) => {
-    if (selectedPlatform === id) {
-      setSelectedPlatform(null);
-    } else {
-      setSelectedPlatform(id);
-      // Auto-configure settings based on platform
-      switch(id) {
-        case 'tiktok':
-          setSettings({...settings, fps: 30, secondsPerImage: 2.5}); // Short, punchy
-          break;
-        case 'instagram':
-          setSettings({...settings, fps: 30, secondsPerImage: 3}); // Standard
-          break;
-        case 'facebook':
-          setSettings({...settings, fps: 30, secondsPerImage: 3.5}); // Slightly longer
-          break;
-        case 'youtube':
-          setSettings({...settings, fps: 60, secondsPerImage: 4}); // Higher quality
-          break;
-      }
-    }
-  };
-
   const playMusicPreview = (sampleId: string) => {
     if (audioRef.current) audioRef.current.pause();
     const audio = new Audio(`/api/samples/${sampleId}.mp3`);
@@ -219,6 +235,7 @@ const Generate: React.FC = () => {
     audio.play().catch(() => console.log('Demo music'));
     setIsPlayingMusic(true);
     setSelectedSampleMusic(sampleId);
+    setMusicFile(null);
     audio.onended = () => setIsPlayingMusic(false);
   };
 
@@ -273,7 +290,7 @@ const Generate: React.FC = () => {
   };
 
   useEffect(() => {
-    let interval: any;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (jobId && (status === 'queued' || status === 'running')) {
       interval = setInterval(async () => {
         try {
@@ -297,7 +314,9 @@ const Generate: React.FC = () => {
         }
       }, 1000);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [jobId, status]);
 
   const startJob = async () => {
@@ -306,7 +325,7 @@ const Generate: React.FC = () => {
     console.log('📱 platforms:', enabledPlatforms);
     
     if (files.length === 0) {
-      setErrorMessage('გთხოვთ ატვირთოთ მინიმუმ 1 სურათი');
+      setErrorMessage(t('generate.error_no_images'));
       console.log('❌ No files');
       return;
     }
@@ -316,7 +335,7 @@ const Generate: React.FC = () => {
     console.log('✅ hasEnabledPlatform:', hasEnabledPlatform);
     
     if (!hasEnabledPlatform) {
-      setErrorMessage('⚠️ გთხოვთ აირჩიოთ მინიმუმ ერთი სოციალური ქსელი (TikTok, Instagram, Facebook, ან YouTube)');
+      setErrorMessage(t('generate.error_no_platform'));
       console.log('❌ No platform selected');
       return;
     }
@@ -334,10 +353,28 @@ const Generate: React.FC = () => {
     // Add text overlay settings
     const overlayData = {
       ...textOverlay,
-      font: selectedFont,
+      fontFamily: selectedFont.backend,
+      fontKey: selectedFont.id,
+      text: textOverlay.text,
+      fontSizes: {
+        title: TEXT_STYLE.title.size,
+        price: TEXT_STYLE.price.size,
+        phone: TEXT_STYLE.phone.size
+      },
+      fontWeights: {
+        title: TEXT_STYLE.title.weight,
+        price: TEXT_STYLE.price.weight,
+        phone: TEXT_STYLE.phone.weight
+      },
+      letterSpacing: {
+        title: TEXT_STYLE.title.letterSpacing,
+        price: TEXT_STYLE.price.letterSpacing,
+        phone: TEXT_STYLE.phone.letterSpacing
+      },
+      lineHeight: TEXT_STYLE.title.lineHeight,
+      lineGap: TEXT_STYLE.lineGap,
       rooms: propertyRooms,
-      area: propertyArea,
-      // Position is already fully managed in textOverlay state now
+      area: propertyArea
     };
     formData.append('textOverlay', JSON.stringify(overlayData));
     
@@ -365,6 +402,7 @@ const Generate: React.FC = () => {
         setStatus('error');
       }
     } catch (e) {
+      console.error(e);
       setStatus('error');
     }
   };
@@ -373,12 +411,6 @@ const Generate: React.FC = () => {
     if (!jobId) return;
     await fetch(`/api/jobs/${jobId}/cancel`, { method: 'POST' });
     setStatus('canceled');
-  };
-
-  const textColorClasses = {
-    'white': 'text-white',
-    'black': 'text-gray-900',
-    'orange': 'text-primary'
   };
 
     // Position mapping helper
@@ -405,7 +437,7 @@ const Generate: React.FC = () => {
            <div className="flex items-center justify-between mb-6">
              <h3 className="text-lg font-bold text-text-primary flex items-center">
                <Type className="mr-2" size={20} />
-               ტექსტური განყოფილება
+              {t('generate.text_section_title')}
              </h3>
              <button 
                className={`w-12 h-6 rounded-full relative transition-colors ${textOverlay.enabled ? 'bg-primary' : 'bg-surface-light'}`}
@@ -417,40 +449,142 @@ const Generate: React.FC = () => {
            
            <div className={`space-y-6 transition-all duration-300 ${!textOverlay.enabled ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
              {/* Font Selection */}
-             <div>
-               <label className="text-sm font-semibold text-text-secondary mb-2 block">ფონტის არჩევა</label>
-               <div className="relative">
-                 <select 
-                   className="w-full bg-surface-dark border border-surface-light rounded-lg px-4 py-3 text-text-primary focus:outline-none focus:border-primary appearance-none cursor-pointer"
-                   value={selectedFont}
-                   onChange={(e) => setSelectedFont(e.target.value)}
-                   style={{ fontFamily: selectedFont }}
-                 >
-                   {FONTS.map(font => {
-                      // Font Name Localization
-                      let displayName = font;
-                      if (t('nav.generate') === 'გენერაცია') { // Check if Georgian
-                        const kaMap: Record<string, string> = {
-                          'Fira GO': 'ფირა GO', 'Montserrat': 'მონსერატი', 'Oswald': 'ოსვალდი', 
-                          'Noto Sans Georgian': 'ნოტო სანსი', 'Inter': 'ინტერი', 'Playfair Display': 'ფლეიფეარი',
-                          'Ubuntu': 'უბუნტუ', 'Kanit': 'კანიტი', 'Roboto': 'რობოტო', 'Lora': 'ლორა',
-                          'Exo 2': 'ეგზო 2', 'Arimo': 'არიმო', 'Tinos': 'ტინოსი', 'Merriweather': 'მერივეზერი',
-                          'Noto Serif Georgian': 'ნოტო სერიფი'
-                        };
-                        displayName = kaMap[font] || font;
-                      }
-                      return (
-                        <option key={font} value={font} style={{ fontFamily: font }}>
-                          {displayName}
-                        </option>
-                      );
-                   })}
-                 </select>
-                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-muted">
-                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                 </div>
-               </div>
-             </div>
+            <div>
+              <label className="text-sm font-semibold text-text-secondary mb-2 block">{t('generate.font_select_label')}</label>
+              <div className="space-y-2">
+                {FONT_OPTIONS.map(font => {
+                  const isSelected = selectedFontId === font.id;
+                  return (
+                    <button
+                      key={font.id}
+                      onClick={() => setSelectedFontId(font.id)}
+                      className={`w-full text-left border rounded-lg px-3 py-2 transition-all ${
+                        isSelected ? 'border-primary bg-primary/10' : 'border-surface-light bg-surface-dark hover:border-primary/60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-primary' : 'bg-surface-light'}`} />
+                          <span className="text-sm font-semibold text-text-primary">{t(`generate.${font.labelKey}`)}</span>
+                        </div>
+                        <span className="text-xs text-text-secondary truncate" style={{ fontFamily: font.css }}>
+                          {previewSampleText}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-3">
+                <div className="text-xs text-text-muted mb-2">{t('generate.font_live_preview')}</div>
+                <div
+                  ref={previewRef}
+                  className="relative w-full overflow-hidden rounded-lg border border-surface-light bg-surface-dark"
+                  style={{ aspectRatio: '9 / 16' }}
+                >
+                  {files[0]?.preview ? (
+                    <img src={files[0].preview} alt={t('generate.preview_alt')} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-br from-surface-light to-surface" />
+                  )}
+                  <div
+                    className="absolute w-[90%] z-10"
+                    style={{
+                      ...getPreviewStyle(textOverlay.position),
+                      color: TEXT_COLORS.find(c => c.name === textOverlay.color)?.value || 'white',
+                      fontFamily: selectedFont.css,
+                      textShadow: textOverlay.color === 'white' ? '0 1px 3px rgba(0,0,0,0.6)' : 'none'
+                    }}
+                  >
+                    {hasPreviewText && (
+                      <div
+                        style={{
+                          fontSize: `${getScaledSize(TEXT_STYLE.title.size)}px`,
+                          fontWeight: TEXT_STYLE.title.weight,
+                          lineHeight: TEXT_STYLE.title.lineHeight,
+                          letterSpacing: getScaledLetterSpacing(TEXT_STYLE.title.letterSpacing)
+                        }}
+                      >
+                        {previewText}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 border-t border-surface-light/60 pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-semibold text-text-secondary">{t('generate.font_compare_title')}</span>
+                  <button
+                    className={`w-12 h-6 rounded-full relative transition-colors ${compareMode ? 'bg-primary' : 'bg-surface-light'}`}
+                    onClick={() => setCompareMode(!compareMode)}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${compareMode ? 'left-7' : 'left-1'}`} />
+                  </button>
+                </div>
+                {compareMode && (
+                  <div className="space-y-3">
+                    <div className="text-xs text-text-muted">{t('generate.font_compare_hint')}</div>
+                    <div className="space-y-2">
+                      {FONT_OPTIONS.map(font => {
+                        const isChecked = compareFonts.includes(font.id);
+                        const disableAdd = !isChecked && compareFonts.length >= 3;
+                        return (
+                          <label
+                            key={font.id}
+                            className={`flex items-center justify-between gap-3 border rounded-lg px-3 py-2 cursor-pointer ${
+                              isChecked ? 'border-primary/70 bg-primary/10' : 'border-surface-light bg-surface-dark'
+                            } ${disableAdd ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="accent-primary"
+                              checked={isChecked}
+                              disabled={disableAdd}
+                              onChange={() => {
+                                setCompareFonts(prev => {
+                                  if (prev.includes(font.id)) return prev.filter(id => id !== font.id);
+                                  if (prev.length >= 3) return prev;
+                                  return [...prev, font.id];
+                                });
+                              }}
+                            />
+                            <span className="text-sm text-text-secondary">{t(`generate.${font.labelKey}`)}</span>
+                            <span className="text-xs text-text-secondary truncate" style={{ fontFamily: font.css }}>
+                              {previewSampleText}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {compareFonts.length >= 2 && (
+                      <div className="space-y-2">
+                        {compareFonts.map(fontId => {
+                          const font = FONT_OPTIONS.find(item => item.id === fontId);
+                          if (!font) return null;
+                          return (
+                            <div key={font.id} className="border border-surface-light rounded-lg bg-surface-dark/60 p-3">
+                              <div className="text-xs text-text-muted mb-2">{t(`generate.${font.labelKey}`)}</div>
+                              <div style={{ fontFamily: font.css, color: TEXT_COLORS.find(c => c.name === textOverlay.color)?.value || 'white' }}>
+                                <div
+                                  style={{
+                                    fontSize: `${getScaledSize(TEXT_STYLE.title.size)}px`,
+                                    fontWeight: TEXT_STYLE.title.weight,
+                                    lineHeight: TEXT_STYLE.title.lineHeight,
+                                    letterSpacing: getScaledLetterSpacing(TEXT_STYLE.title.letterSpacing)
+                                  }}
+                                >
+                                  {previewSampleText}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
 
              {/* Visuals (Collapsible Color Picker) */}
              <div>
@@ -458,7 +592,7 @@ const Generate: React.FC = () => {
                  <summary className="flex items-center justify-between p-3 cursor-pointer list-none select-none">
                    <div className="flex items-center">
                      <Palette size={16} className="mr-2 text-text-secondary" />
-                     <span className="text-sm font-medium text-text-secondary">ფერები & პოზიცია</span>
+                     <span className="text-sm font-medium text-text-secondary">{t('generate.colors_position_label')}</span>
                    </div>
                    <div className="flex items-center">
                      <div 
@@ -474,7 +608,7 @@ const Generate: React.FC = () => {
                      {TEXT_COLORS.map((c) => (
                        <button
                          key={c.name}
-                         onClick={() => setTextOverlay({...textOverlay, color: c.name as any})}
+                        onClick={() => setTextOverlay({...textOverlay, color: c.name})}
                          className={`w-8 h-8 rounded-md border-2 transition-all ${
                            textOverlay.color === c.name ? 'border-primary scale-110 ring-2 ring-primary/20' : 'border-surface-light hover:border-primary/50'
                          }`}
@@ -492,19 +626,19 @@ const Generate: React.FC = () => {
                           className={`text-xs py-1.5 rounded-md transition-all ${textOverlay.position.startsWith('top') ? 'bg-primary text-white shadow' : 'text-text-secondary hover:bg-surface-light'}`}
                           onClick={() => {
                              const align = textOverlay.position.split('-')[1] || 'left';
-                             setTextOverlay({...textOverlay, position: `top-${align}` as any});
+                             setTextOverlay({...textOverlay, position: `top-${align}` as TextOverlay['position']});
                           }}
                         >
-                          წარწერა ზემოთ
+                          {t('generate.position_top')}
                         </button>
                         <button 
                           className={`text-xs py-1.5 rounded-md transition-all ${textOverlay.position.startsWith('bottom') ? 'bg-primary text-white shadow' : 'text-text-secondary hover:bg-surface-light'}`}
                           onClick={() => {
                              const align = textOverlay.position.split('-')[1] || 'left';
-                             setTextOverlay({...textOverlay, position: `bottom-${align}` as any});
+                             setTextOverlay({...textOverlay, position: `bottom-${align}` as TextOverlay['position']});
                           }}
                         >
-                          წარწერა ქვემოთ
+                          {t('generate.position_bottom')}
                         </button>
                       </div>
 
@@ -516,10 +650,10 @@ const Generate: React.FC = () => {
                             className={`text-xs py-1.5 rounded-md transition-all capitalize ${textOverlay.position.includes(align) ? 'bg-surface-light text-primary font-bold border border-primary/30' : 'text-text-muted hover:text-text-secondary'}`}
                             onClick={() => {
                                const vert = textOverlay.position.split('-')[0] || 'bottom';
-                               setTextOverlay({...textOverlay, position: `${vert}-${align}` as any});
+                               setTextOverlay({...textOverlay, position: `${vert}-${align}` as TextOverlay['position']});
                             }}
                           >
-                            {align === 'left' ? 'მარცხნივ' : align === 'center' ? 'ცენტრი' : 'მარჯვნივ'}
+                            {align === 'left' ? t('generate.align_left') : align === 'center' ? t('generate.align_center') : t('generate.align_right')}
                           </button>
                         ))}
                       </div>
@@ -530,53 +664,40 @@ const Generate: React.FC = () => {
 
              {/* Property Details - Stacked like Price/Phone */}
              <div>
-               <label className="text-xs font-medium text-text-muted mb-1 block">ოთახები</label>
+              <label className="text-xs font-medium text-text-muted mb-1 block">{t('generate.rooms_label')}</label>
                <input 
                  type="text" 
                  className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-primary placeholder-text-muted"
-                 placeholder="მაგ: 3"
+                placeholder={t('generate.rooms_placeholder')}
                  value={propertyRooms}
                  onChange={e => setPropertyRooms(e.target.value)}
                />
              </div>
              <div>
-               <label className="text-xs font-medium text-text-muted mb-1 block">კვადრატულობა (m²)</label>
+              <label className="text-xs font-medium text-text-muted mb-1 block">{t('generate.area_label')}</label>
                <input 
                  type="text" 
                  className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-primary placeholder-text-muted"
-                 placeholder="მაგ: 85"
+                placeholder={t('generate.area_placeholder')}
                  value={propertyArea}
                  onChange={e => setPropertyArea(e.target.value)}
                />
              </div>
 
-             {/* Price - Row 2 */}
-             <div>
-               <label className="text-xs font-medium text-text-muted mb-1 block">ფასი</label>
-               <input 
-                 type="text" 
-                 className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary placeholder-text-muted focus:outline-none focus:border-primary"
-                 placeholder="მაგ: $150,000"
-                 value={textOverlay.price}
-                 onChange={e => setTextOverlay({...textOverlay, price: e.target.value})}
-               />
-             </div>
-
-             {/* Contact - Row 3 */}
-             <div>
-               <label className="text-xs font-medium text-text-muted mb-1 block">ტელეფონი</label>
-               <input 
-                 type="text" 
-                 className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary placeholder-text-muted focus:outline-none focus:border-primary"
-                 placeholder="მაგ: 599 12 34 56"
-                 value={textOverlay.phone}
-                 onChange={e => setTextOverlay({...textOverlay, phone: e.target.value})}
-               />
-             </div>
+            <div>
+             <label className="text-xs font-medium text-text-muted mb-1 block">{t('generate.text_input_label')}</label>
+              <input 
+                type="text" 
+                className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary placeholder-text-muted focus:outline-none focus:border-primary"
+               placeholder={t('generate.text_input_placeholder')}
+                value={textOverlay.text}
+                onChange={e => setTextOverlay({...textOverlay, text: e.target.value})}
+              />
+            </div>
              
              {/* Outro Section (Sareklamo Qudis Ganyofileba) */}
              <div className="pt-4 border-t border-surface-light mt-4">
-                <h3 className="text-sm font-bold text-text-primary mb-3">სარეკლამო ქუდის განყოფილება</h3>
+               <h3 className="text-sm font-bold text-text-primary mb-3">{t('generate.outro_section_title')}</h3>
                 <div className="grid grid-cols-3 gap-2">
                   {OUTRO_VIDEOS.map((outro) => (
                     <button
@@ -599,7 +720,7 @@ const Generate: React.FC = () => {
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-text-muted mt-2 text-center">აირჩიეთ დასასრული ვიდეო</p>
+               <p className="text-xs text-text-muted mt-2 text-center">{t('generate.outro_section_hint')}</p>
              </div>
            </div>
         </div>
@@ -636,7 +757,7 @@ const Generate: React.FC = () => {
            {files.length > 0 && (
              <div className="mt-6 space-y-2">
                <p className="text-sm text-text-secondary mb-3">
-                 {t('generate.images_selected', { count: files.length })} - Drag to reorder (max {MAX_IMAGES})
+                {t('generate.images_selected_hint', { count: files.length, max: MAX_IMAGES })}
                </p>
                <div className="grid grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-2">
                  {files.map((file, i) => (
@@ -653,19 +774,26 @@ const Generate: React.FC = () => {
                      <img src={file.preview} alt={file.file.name} className="w-full h-full object-contain" />
                      
                      {/* Text Overlay Preview */}
-                     {textOverlay.enabled && (
+                    {textOverlay.enabled && hasPreviewText && (
                        <div 
-                         className="absolute w-[90%] text-[8px] leading-tight z-10"
+                        className="absolute w-[90%] z-10"
                          style={{ 
                             ...getPreviewStyle(textOverlay.position),
                             color: TEXT_COLORS.find(c => c.name === textOverlay.color)?.value || 'white',
-                            fontFamily: selectedFont,
+                           fontFamily: selectedFont.css,
                             textShadow: '1px 1px 2px rgba(0,0,0,0.8)'
                          }}
                        >
-                         <div>{textOverlay.title || 'სათაური'}</div>
-                         <div className="text-[10px] font-bold">{textOverlay.price || '$150k'}</div>
-                         <div>{textOverlay.phone || '599...'}</div>
+                       <div
+                         style={{
+                           fontSize: `${getScaledSize(TEXT_STYLE.title.size)}px`,
+                           fontWeight: TEXT_STYLE.title.weight,
+                           lineHeight: TEXT_STYLE.title.lineHeight,
+                           letterSpacing: getScaledLetterSpacing(TEXT_STYLE.title.letterSpacing)
+                         }}
+                       >
+                         {previewText}
+                       </div>
                        </div>
                      )}
 
@@ -716,7 +844,7 @@ const Generate: React.FC = () => {
                   </div>
                   {isDone && file && (
                     <a href={`/api/jobs/${jobId}/download/${file}`} className="w-full flex items-center justify-center bg-surface-light hover:bg-surface-light/80 text-text-primary text-sm py-2 rounded">
-                      <Download size={14} className="mr-1" /> Download
+                      <Download size={14} className="mr-1" /> {t('generate.btn_download')}
                     </a>
                   )}
                 </div>
@@ -754,12 +882,8 @@ const Generate: React.FC = () => {
                     {/* Header: Logo Image + Name + Toggle */}
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center">
-                        <div className="w-10 h-10 rounded-lg mr-3 overflow-hidden shadow-md bg-white">
-                          <img 
-                            src={`/src/assets/logo-${platform.id}.jpg`}
-                            alt={platform.name}
-                            className="w-full h-full object-cover"
-                          />
+                        <div className="w-10 h-10 rounded-lg mr-3 flex items-center justify-center shadow-md bg-surface-light">
+                          <platform.icon size={20} style={{ color: platform.color }} />
                         </div>
                         <div className="text-sm font-medium text-text-primary">{platform.name}</div>
                       </div>
@@ -801,12 +925,12 @@ const Generate: React.FC = () => {
               
               {/* Selected Platforms Summary */}
               <div className="mt-4 p-3 bg-surface-dark/30 rounded-lg">
-                <div className="text-xs text-text-secondary mb-2">არჩეული პლატფორმები:</div>
+                <div className="text-xs text-text-secondary mb-2">{t('generate.selected_platforms_label')}</div>
                 <div className="flex flex-wrap gap-2">
-                  {Object.entries(enabledPlatforms).filter(([_, enabled]) => enabled).length === 0 ? (
-                    <span className="text-xs text-text-muted">არაფერი არჩეული</span>
+                  {Object.entries(enabledPlatforms).filter(([, enabled]) => enabled).length === 0 ? (
+                    <span className="text-xs text-text-muted">{t('generate.selected_platforms_empty')}</span>
                   ) : (
-                    Object.entries(enabledPlatforms).filter(([_, enabled]) => enabled).map(([id]) => {
+                    Object.entries(enabledPlatforms).filter(([, enabled]) => enabled).map(([id]) => {
                       const platform = SOCIAL_PLATFORMS.find(p => p.id === id);
                       return (
                         <span key={id} className="px-2 py-1 bg-primary/20 text-primary text-xs rounded-full">
@@ -830,7 +954,7 @@ const Generate: React.FC = () => {
               {/* VISUAL PREVIEW BOX - Shows actual transition with real images */}
               <div className="mb-4 bg-surface-dark rounded-xl p-4 border border-surface-light">
                 <div className="text-xs text-text-secondary mb-2 text-center">
-                  Preview: {hoveredTransition ? t(`generate.transition_${hoveredTransition}`) : t(`generate.transition_${settings.transition}`)}
+                  {t('generate.transition_preview_label')} {hoveredTransition ? t(`generate.transition_${hoveredTransition}`) : t(`generate.transition_${settings.transition}`)}
                 </div>
                 <div className="relative w-full h-40 bg-surface rounded-lg overflow-hidden">
                   {/* Image 1 (Background) - Default visible */}
@@ -959,7 +1083,7 @@ const Generate: React.FC = () => {
               
               {/* Selected Transition Info */}
               <div className="mt-3 p-2 bg-surface-dark/50 rounded-lg text-center">
-                <span className="text-xs text-text-secondary">არჩეული: </span>
+                <span className="text-xs text-text-secondary">{t('generate.selected_label')} </span>
                 <span className="text-sm font-bold text-primary">
                   {TRANSITIONS.find(t => t.value === settings.transition)?.icon} {' '}
                   {t(`generate.transition_${settings.transition}`)}
@@ -972,7 +1096,7 @@ const Generate: React.FC = () => {
               <div className="flex justify-between items-center mb-4">
                 <label className="text-sm font-medium text-text-secondary">{t('generate.music_label')}</label>
                 <div className="flex items-center space-x-2">
-                  <span className="text-xs text-text-muted">{isMusicEnabled ? 'Enabled' : 'Disabled'}</span>
+                  <span className="text-xs text-text-muted">{isMusicEnabled ? t('generate.music_enabled') : t('generate.music_disabled')}</span>
                   <button 
                     className={`w-10 h-5 rounded-full relative transition-colors ${isMusicEnabled ? 'bg-primary' : 'bg-surface-light'}`}
                     onClick={() => { setIsMusicEnabled(!isMusicEnabled); if (isMusicEnabled) stopMusicPreview(); }}
@@ -983,8 +1107,31 @@ const Generate: React.FC = () => {
               </div>
 
               <div className="space-y-3">
+                {isMusicEnabled && (
+                  <div className="flex items-center justify-between bg-surface-dark p-2 rounded-lg border border-surface-light">
+                    <div className="text-xs text-text-secondary">
+                      {musicFile ? musicFile.name : t('generate.music_upload')}
+                    </div>
+                    <label className="text-xs px-3 py-1.5 rounded bg-surface-light text-text-primary cursor-pointer">
+                      {t('generate.music_browse')}
+                      <input
+                        type="file"
+                        accept="audio/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          if (file) {
+                            stopMusicPreview();
+                            setSelectedSampleMusic(null);
+                            setMusicFile(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                )}
                 <div className="bg-surface-dark rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
-                  {SAMPLE_MUSIC.map((sample) => (
+                  {SAMPLE_MUSIC.map((sample, index) => (
                     <div 
                       key={sample.id}
                       className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${
@@ -1001,9 +1148,9 @@ const Generate: React.FC = () => {
                         <Music size={16} className={selectedSampleMusic === sample.id ? 'text-primary' : 'text-text-muted'} />
                         <div className="flex flex-col">
                           <span className={`text-sm font-medium ${selectedSampleMusic === sample.id ? 'text-primary' : 'text-text-secondary'}`}>
-                            {sample.name}
+                            {t('generate.sample_track_name', { index: index + 1, genre: t(`generate.genre_${sample.genreKey}`) })}
                           </span>
-                          <span className="text-xs text-text-muted">{sample.duration} • {sample.genre}</span>
+                          <span className="text-xs text-text-muted">{sample.duration} • {t(`generate.genre_${sample.genreKey}`)}</span>
                         </div>
                       </div>
                       {isPlayingMusic && selectedSampleMusic === sample.id ? (
@@ -1047,7 +1194,7 @@ const Generate: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-text-muted mb-1 block">Duration per image</label>
+                  <label className="text-xs text-text-muted mb-1 block">{t('generate.duration')}</label>
                   <div className="flex items-center space-x-2 bg-surface-dark rounded-lg p-1 border border-surface-light">
                     <button 
                       onClick={() => setSettings(s => ({...s, secondsPerImage: Math.max(0.5, s.secondsPerImage - 0.5)}))}
@@ -1067,7 +1214,7 @@ const Generate: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-text-muted mb-1 block">Transition Duration</label>
+                  <label className="text-xs text-text-muted mb-1 block">{t('generate.transition_duration')}</label>
                   <div className="flex items-center space-x-2">
                      <input type="range" min="0.5" max="3" step="0.1"
                       className="flex-1 h-2 bg-surface-light rounded-lg accent-primary"
@@ -1080,7 +1227,7 @@ const Generate: React.FC = () => {
               </div>
 
               <div className="mt-4">
-                 <label className="text-xs text-text-muted mb-1 block">FPS</label>
+                 <label className="text-xs text-text-muted mb-1 block">{t('generate.fps')}</label>
                  <input type="number" 
                     className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-primary"
                     value={settings.fps}
@@ -1096,8 +1243,8 @@ const Generate: React.FC = () => {
                   <div className="bg-primary h-full animate-pulse w-full" />
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-primary text-sm">{status === 'queued' ? 'Queued...' : 'Rendering...'}</span>
-                  <button onClick={cancelJob} className="text-xs text-red-400">Cancel</button>
+                  <span className="text-primary text-sm">{status === 'queued' ? t('generate.status_queued') : t('generate.status_rendering')}</span>
+                  <button onClick={cancelJob} className="text-xs text-red-400">{t('generate.btn_cancel')}</button>
                 </div>
               </div>
             ) : (
@@ -1105,12 +1252,12 @@ const Generate: React.FC = () => {
                 {/* Validation Messages */}
                 {files.length === 0 && (
                   <div className="mb-3 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-yellow-400 text-xs text-center">
-                    ⚠️ ატვირთეთ სურათები რომ დაიწყოთ გენერაცია
+                    {t('generate.validation_no_images')}
                   </div>
                 )}
                 {files.length > 0 && !Object.values(enabledPlatforms).some(enabled => enabled) && (
                   <div className="mb-3 p-2 bg-orange-500/10 border border-orange-500/30 rounded text-orange-400 text-xs text-center">
-                    ⚠️ აირჩიეთ მინიმუმ ერთი სოციალური ქსელი
+                    {t('generate.validation_no_platform')}
                   </div>
                 )}
                 
@@ -1125,10 +1272,10 @@ const Generate: React.FC = () => {
                 >
                   <Play className="mr-2" fill="currentColor" size={20} />
                   {files.length === 0 
-                    ? 'სურათები არ არის' 
+                    ? t('generate.disabled_no_images')
                     : !Object.values(enabledPlatforms).some(enabled => enabled)
-                      ? 'პლატფორმა არ არის არჩეული'
-                      : (t('generate.btn_generate') || 'ვიდეოს გენერაცია')
+                      ? t('generate.disabled_no_platform')
+                      : t('generate.btn_generate')
                   }
                 </button>
               </div>
@@ -1136,12 +1283,12 @@ const Generate: React.FC = () => {
 
             {status === 'done' && (
               <div className="mt-4 bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-lg text-center text-sm">
-                წარმატება! <button onClick={() => navigate('/outputs')} className="underline font-bold">ნახე შედეგები</button>
+                {t('generate.status_success')} <button onClick={() => navigate('/outputs')} className="underline font-bold">{t('generate.btn_view_outputs')}</button>
               </div>
             )}
             {status === 'error' && (
               <div className="mt-4 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-center text-sm">
-                {errorMessage || 'შეცდომა მოხდა'}
+                {errorMessage || t('generate.status_error')}
               </div>
             )}
           </div>

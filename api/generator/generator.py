@@ -5,6 +5,7 @@ import shutil
 import argparse
 import multiprocessing
 from PIL import Image, ImageDraw, ImageFont
+import numpy as np
 
 # Monkey patch for Pillow 10+ which removed ANTIALIAS
 if not hasattr(Image, 'ANTIALIAS'):
@@ -54,52 +55,123 @@ class MyBarLogger(ProgressBarLogger):
              sys.stderr.write(f"::PROGRESS::{self.fmt}::{int(percentage)}\n")
              sys.stderr.flush()
 
-def create_pil_text_clip(text, fontsize, color, stroke_width, width, height, align, position_y):
-    """
-    Create a MoviePy ImageClip with text using Pillow (no ImageMagick required).
-    """
+def create_pil_text_clip(text, fontsize, color, stroke_width, width, height, align, position_y, font_family=None, letter_spacing=0, line_height=1.0, font_weight=None):
     try:
-        # Create a transparent image for the text
-        # Make it full width for proper centering
-        img = Image.new('RGBA', (width, int(fontsize * 1.5)), (0, 0, 0, 0))
+        def contains_georgian(value):
+            return any('\u10A0' <= ch <= '\u10FF' for ch in value)
+
+        def load_font(family, size, text_value):
+            candidates = []
+            font_dir = None
+            if os.name == 'nt':
+                windir = os.environ.get('WINDIR', 'C:\\Windows')
+                font_dir = os.path.join(windir, 'Fonts')
+
+            def add_candidate(name):
+                if not name:
+                    return
+                candidates.append(name)
+                if font_dir:
+                    candidates.append(os.path.join(font_dir, name))
+
+            family_key = (family or '').strip().lower()
+            has_georgian = contains_georgian(text_value)
+
+            if has_georgian:
+                for candidate in [
+                    'NotoSansGeorgian-Regular.ttf',
+                    'NotoSansGeorgian.ttf',
+                    'NotoSansGeorgian-Bold.ttf',
+                    'Sylfaen.ttf',
+                    'sylfaen.ttf',
+                    'segoeui.ttf',
+                    'segoeuib.ttf'
+                ]:
+                    add_candidate(candidate)
+
+            if family_key:
+                add_candidate(family)
+                add_candidate(f"{family}.ttf")
+                add_candidate(f"{family}.otf")
+
+            family_map = {
+                'arial': ['arial.ttf'],
+                'times new roman': ['times.ttf'],
+                'courier new': ['cour.ttf'],
+                'comic sans ms': ['comic.ttf'],
+                'impact': ['impact.ttf']
+            }
+            for name in family_map.get(family_key, []):
+                add_candidate(name)
+
+            if has_georgian:
+                add_candidate('Sylfaen.ttf')
+                add_candidate('sylfaen.ttf')
+                add_candidate('segoeui.ttf')
+
+            add_candidate('arial.ttf')
+            add_candidate('DejaVuSans.ttf')
+
+            for candidate in candidates:
+                try:
+                    return ImageFont.truetype(candidate, size)
+                except Exception:
+                    continue
+            if has_georgian:
+                print("Warning: Georgian text detected but no compatible font found. Falling back to default.")
+            return ImageFont.load_default()
+
+        def measure_text(draw_obj, value, font_obj, spacing):
+            if spacing <= 0:
+                bbox = draw_obj.textbbox((0, 0), value, font=font_obj)
+                return bbox[2] - bbox[0], bbox[3] - bbox[1]
+            total_w = 0
+            max_h = 0
+            for ch in value:
+                bbox = draw_obj.textbbox((0, 0), ch, font=font_obj)
+                ch_w = bbox[2] - bbox[0]
+                ch_h = bbox[3] - bbox[1]
+                total_w += ch_w
+                if ch_h > max_h:
+                    max_h = ch_h
+            total_w += spacing * max(0, len(value) - 1)
+            return total_w, max_h
+
+        def draw_text_with_spacing(draw_obj, value, start_x, start_y, font_obj, fill_color, stroke, stroke_fill, spacing):
+            if spacing <= 0:
+                if stroke > 0:
+                    for offset_x in range(-stroke, stroke + 1):
+                        for offset_y in range(-stroke, stroke + 1):
+                            draw_obj.text((start_x + offset_x, start_y + offset_y), value, font=font_obj, fill=stroke_fill)
+                draw_obj.text((start_x, start_y), value, font=font_obj, fill=fill_color)
+                return
+            current_x = start_x
+            for ch in value:
+                if stroke > 0:
+                    for offset_x in range(-stroke, stroke + 1):
+                        for offset_y in range(-stroke, stroke + 1):
+                            draw_obj.text((current_x + offset_x, start_y + offset_y), ch, font=font_obj, fill=stroke_fill)
+                draw_obj.text((current_x, start_y), ch, font=font_obj, fill=fill_color)
+                bbox = draw_obj.textbbox((0, 0), ch, font=font_obj)
+                current_x += (bbox[2] - bbox[0]) + spacing
+
+        img = Image.new('RGBA', (width, int(max(fontsize * line_height, fontsize) + stroke_width * 2 + 4)), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
-        
-        # Try to load Arial font, fallback to default
-        try:
-            font = ImageFont.truetype("arial.ttf", fontsize)
-        except IOError:
-            try:
-                # Try a common linux font
-                font = ImageFont.truetype("DejaVuSans.ttf", fontsize)
-            except IOError:
-                font = ImageFont.load_default()
-        
-        # Calculate text size
-        bbox = draw.textbbox((0, 0), text, font=font)
-        text_w = bbox[2] - bbox[0]
-        text_h = bbox[3] - bbox[1]
-        
-        # Calculate X position
-        x = 50 # Default left padding
+
+        font = load_font(font_family, fontsize, text)
+        text_w, text_h = measure_text(draw, text, font, letter_spacing)
+
+        padding = int(width * 0.05)
+        x = padding
         if align == 'center':
             x = (width - text_w) // 2
         elif align == 'right':
-            x = width - text_w - 50
-            
-        # Draw stroke (outline) manually
-        if stroke_width > 0:
-            stroke_color = 'black'
-            # Draw in 8 directions for stroke
-            for offset_x in range(-stroke_width, stroke_width+1):
-                for offset_y in range(-stroke_width, stroke_width+1):
-                    draw.text((x + offset_x, (img.height - text_h)//2 + offset_y), text, font=font, fill=stroke_color)
-        
-        # Draw main text
-        draw.text((x, (img.height - text_h)//2), text, font=font, fill=color)
-        
-        # Convert to numpy array for MoviePy
+            x = width - text_w - padding
+
+        y = (img.height - text_h) // 2
+        draw_text_with_spacing(draw, text, x, y, font, color, stroke_width, 'black', letter_spacing)
+
         return ImageClip(np.array(img)).set_position(('center', position_y))
-        
     except Exception as e:
         print(f"Error creating text clip: {e}")
         return None
@@ -107,97 +179,129 @@ def create_pil_text_clip(text, fontsize, color, stroke_width, width, height, ali
 def create_text_overlay(clip, textOverlay, width, height):
     """Add text and logo overlay to clip"""
     if not textOverlay.get('enabled', False):
+        print("DEBUG: Text overlay disabled")
         return clip
     
+    text_value = textOverlay.get('text', '').strip()
     title = textOverlay.get('title', '')
     price = textOverlay.get('price', '')
     phone = textOverlay.get('phone', '')
     position = textOverlay.get('position', 'bottom-left')
     color = textOverlay.get('color', 'white')
     show_logo = textOverlay.get('showLogo', False)
+    print(f"DEBUG: text_overlay text_len={len(text_value)} position={position} color={color} fontFamily={textOverlay.get('fontFamily')}")
     
     # Color mapping
     color_map = {
         'white': 'white',
-        'black': 'black', 
-        'orange': '#F97316'
+        'black': 'black',
+        'orange': '#F97316',
+        'red': '#EF4444',
+        'green': '#22C55E',
+        'sky': '#0EA5E9',
+        'gray': '#6B7280',
+        'maroon': '#800000'
     }
     text_color = color_map.get(color, 'white')
     
     # Position mapping
-    position_map = {
-        'bottom-left': ('left', height - 150),
-        'bottom-center': ('center', height - 150),
-        'bottom-right': ('right', height - 150),
-        'top-left': ('left', 250),
-        'top-center': ('center', 250),
-        'top-right': ('right', 250)
-    }
-    
-    text_align, y_pos = position_map.get(position, ('left', height - 150))
+    position_parts = position.split('-')
+    vertical = position_parts[0] if len(position_parts) > 0 else 'bottom'
+    horizontal = position_parts[1] if len(position_parts) > 1 else 'left'
+    text_align = horizontal
+
+    font_family = textOverlay.get('fontFamily')
+    font_sizes = textOverlay.get('fontSizes', {})
+    font_weights = textOverlay.get('fontWeights', {})
+    letter_spacing = textOverlay.get('letterSpacing', {})
+    line_height = float(textOverlay.get('lineHeight', 1.1))
+    line_gap = int(textOverlay.get('lineGap', 12))
+
+    def get_size(key, default):
+        value = font_sizes.get(key, default)
+        try:
+            return int(value)
+        except Exception:
+            return default
+
+    def get_weight(key, default):
+        value = font_weights.get(key, default)
+        try:
+            return int(value)
+        except Exception:
+            return default
+
+    def get_spacing(key, default):
+        value = letter_spacing.get(key, default)
+        try:
+            return float(value)
+        except Exception:
+            return default
+
+    title_size = get_size('title', 60)
+    price_size = get_size('price', 80)
+    phone_size = get_size('phone', 40)
+
+    title_weight = get_weight('title', 600)
+    price_weight = get_weight('price', 700)
+    phone_weight = get_weight('phone', 500)
+
+    title_spacing = get_spacing('title', 0)
+    price_spacing = get_spacing('price', 0)
+    phone_spacing = get_spacing('phone', 0)
+
+    lines = []
+    if text_value:
+        lines.append(('text', text_value, title_size, title_weight, title_spacing, 2))
+    else:
+        if title:
+            lines.append(('title', title, title_size, title_weight, title_spacing, 2))
+        if price:
+            lines.append(('price', price, price_size, price_weight, price_spacing, 3))
+        if phone:
+            lines.append(('phone', f" {phone}", phone_size, phone_weight, phone_spacing, 1))
+
+    if not lines:
+        print("DEBUG: No text lines to render after validation")
+        return clip
+
+    total_height = 0
+    for i, (_, _, size, _, _, _) in enumerate(lines):
+        line_height_px = int(max(size * line_height, size))
+        total_height += line_height_px
+        if i < len(lines) - 1:
+            total_height += line_gap
+
+    if vertical == 'top':
+        y_pos = int(height * 0.1)
+    else:
+        y_pos = int(height * 0.9 - total_height)
     
     # Build text clips
     text_clips = []
     current_y = y_pos
-    
-    # Helper to calculate position based on alignment
-    def get_pos(clip_w, current_y, align, container_w):
-        if align == 'center':
-            return ('center', current_y)
-        elif align == 'right':
-            return (container_w - clip_w - 50, current_y)
-        else:
-            return (50, current_y)
 
-    if title:
-        # Use our custom PIL function
-        title_clip = create_pil_text_clip(
-            title, 
-            fontsize=60, 
-            color=text_color, 
-            stroke_width=2, 
-            width=width, 
-            height=height, 
+    for index, (_, value, size, weight, spacing, stroke) in enumerate(lines):
+        clip_item = create_pil_text_clip(
+            value,
+            fontsize=size,
+            color=text_color,
+            stroke_width=stroke,
+            width=width,
+            height=height,
             align=text_align,
-            position_y=current_y
+            position_y=current_y,
+            font_family=font_family,
+            letter_spacing=spacing,
+            line_height=line_height,
+            font_weight=weight
         )
-        if title_clip:
-            title_clip = title_clip.set_duration(clip.duration)
-            # Ensure text clip position is relative to video size, not cropped
-            text_clips.append(title_clip)
-            current_y += 70 # Approximate height + padding
-    
-    if price:
-        price_clip = create_pil_text_clip(
-            price, 
-            fontsize=80, 
-            color=text_color, 
-            stroke_width=3, 
-            width=width, 
-            height=height, 
-            align=text_align,
-            position_y=current_y
-        )
-        if price_clip:
-            price_clip = price_clip.set_duration(clip.duration)
-            text_clips.append(price_clip)
-            current_y += 90 # Approximate height + padding
-    
-    if phone:
-        phone_text = f" {phone}"
-        phone_clip = create_pil_text_clip(
-            phone_text, 
-            fontsize=40, 
-            color=text_color, 
-            stroke_width=1, 
-            width=width, 
-            height=height, 
-            align=text_align,
-            position_y=current_y
-        )
-        if phone_clip:
-            phone_clip = phone_clip.set_duration(clip.duration)
-            text_clips.append(phone_clip)
+        if clip_item:
+            clip_item = clip_item.set_duration(clip.duration)
+            text_clips.append(clip_item)
+            line_height_px = int(max(size * line_height, size))
+            if index < len(lines) - 1:
+                current_y += line_height_px + line_gap
     
     # Logo overlay (top-right)
     if show_logo:
@@ -209,7 +313,8 @@ def create_text_overlay(clip, textOverlay, width, height):
             width=width,
             height=height,
             align='right', # Force right align for logo
-            position_y=30
+            position_y=30,
+            font_family=font_family
         )
         if logo_clip:
             # Override position for top-right specifically
@@ -223,104 +328,6 @@ def create_text_overlay(clip, textOverlay, width, height):
         return final
     
     return clip
-
-def add_platform_label(clip, platform_name, width, height):
-    """Add platform logo at top of video"""
-    from moviepy.editor import ImageClip
-    import os
-    
-    print(f"DEBUG add_platform_label: platform_name={platform_name}, size={width}x{height}")
-    
-    if not platform_name:
-        print("DEBUG: No platform name, skipping label")
-        return clip
-    
-    # Map platform names to logo files
-    platform_to_logo = {
-        'TIKTOK': 'logo-tiktok.jpg',
-        'INSTAGRAM': 'logo-instagram.jpg',
-        'FACEBOOK': 'logo-facebook.jpg',
-        'YOUTUBE': 'logo-youtube.jpg'
-    }
-    
-    # Handle multiple platforms (e.g., "TIKTOK + INSTAGRAM")
-    platforms = [p.strip() for p in platform_name.split('+')]
-    logo_clips = []
-    
-    # Try multiple possible paths
-    possible_base_paths = [
-        os.path.join(os.path.dirname(__file__), '..', '..'),  # From api/generator/generator.py
-        os.path.join(os.path.dirname(__file__), '..'),  # From api/generator/
-        os.getcwd(),  # Current working directory
-        os.path.join(os.getcwd(), 'src'),  # src folder
-        os.path.join(os.getcwd(), 'public'),  # public folder
-    ]
-    
-    for platform in platforms:
-        logo_file = platform_to_logo.get(platform)
-        if not logo_file:
-            print(f"DEBUG: Unknown platform: {platform}")
-            continue
-        
-        # Try to find logo file
-        logo_path = None
-        for base_path in possible_base_paths:
-            for subdir in ['assets', 'public', '']:
-                test_path = os.path.join(base_path, subdir, logo_file) if subdir else os.path.join(base_path, logo_file)
-                print(f"DEBUG: Checking path: {test_path}")
-                if os.path.exists(test_path):
-                    logo_path = test_path
-                    print(f"DEBUG: Found logo at: {logo_path}")
-                    break
-            if logo_path:
-                break
-        
-        if not logo_path:
-            print(f"DEBUG: Logo file {logo_file} not found in any location")
-            continue
-        
-        try:
-            # Logo size: 8% of video width
-            logo_width = int(width * 0.08)
-            
-            logo_clip = ImageClip(logo_path).set_duration(clip.duration)
-            logo_clip = logo_clip.resize(width=logo_width)
-            
-            logo_clips.append(logo_clip)
-            print(f"DEBUG: Added logo for {platform}")
-        except Exception as e:
-            print(f"DEBUG: Error loading logo for {platform}: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    if not logo_clips:
-        print("DEBUG: No logos to add")
-        return clip
-    
-    try:
-        # Position logos at top center
-        if len(logo_clips) == 1:
-            # Single logo - center
-            logo_clips[0] = logo_clips[0].set_position(('center', height * 0.02))
-        else:
-            # Multiple logos - spread horizontally
-            total_width = sum([lc.size[0] for lc in logo_clips]) + (len(logo_clips) - 1) * 20
-            start_x = (width - total_width) // 2
-            current_x = start_x
-            for i, lc in enumerate(logo_clips):
-                logo_clips[i] = lc.set_position((current_x, height * 0.02))
-                current_x += lc.size[0] + 20
-        
-        # Composite with original clip
-        all_clips = [clip] + logo_clips
-        final = CompositeVideoClip(all_clips, size=(width, height))
-        print(f"DEBUG: Successfully added {len(logo_clips)} logo(s)")
-        return final
-    except Exception as e:
-        print(f"Warning: Could not add platform logo: {e}")
-        import traceback
-        traceback.print_exc()
-        return clip
 
 def generate_format(fmt_key, dimensions, images, temp_base, property_id, output_dir, settings, platform_name=None):
     w, h = dimensions
@@ -479,11 +486,7 @@ def generate_format(fmt_key, dimensions, images, temp_base, property_id, output_
         except Exception as e:
             print(f"Warning: Failed to add music: {e}")
 
-    # 6. Add Platform Label
-    if platform_name:
-        final_clip_with_text = add_platform_label(final_clip_with_text, platform_name, w, h)
-    
-    # 7. Write File
+    # 6. Write File
     if platform_name:
         out_filename = f"{property_id}_{platform_name.replace(' + ', '_')}_{fmt_key}.mp4"
     else:
