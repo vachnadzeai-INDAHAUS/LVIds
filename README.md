@@ -5,7 +5,6 @@
 Create stunning video slideshows for your real estate listings, products, or any image collection. 100% local processing - your images never leave your computer.
 
 ![Version](https://img.shields.io/badge/version-1.0.0-orange)
-![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-green)
 
 ## ✨ Features
@@ -163,10 +162,6 @@ pip install Pillow moviepy numpy proglog
 # Kill existing Node processes
 taskkill /f /im node.exe
 ```
-
-## 📝 License
-
-MIT License - feel free to use for personal or commercial projects.
 
 ## 👥 Credits
 

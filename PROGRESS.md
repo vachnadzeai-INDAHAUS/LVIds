@@ -38,7 +38,6 @@ Phase 4 - Polish                 [░░░░░░░░░░] 0%
 - [x] GitHub repository created
 - [x] README.md (English comprehensive)
 - [x] README_KA.md (Georgian)
-- [x] MIT License added
 - [x] All files pushed to GitHub
 
 ### 2026-02-17 - Logo & Social Presets
