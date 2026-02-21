@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Upload, X, Play, Settings as SettingsIcon, 
   Music, Download, Volume2, VolumeX, 
@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../i18n/useLanguage';
+import ModernSlider from '../components/ModernSlider';
 
 interface JobSettings {
   fps: number;
@@ -18,9 +19,14 @@ interface JobSettings {
 interface TextOverlay {
   enabled: boolean;
   text: string;
-  position: 'bottom-left' | 'bottom-center' | 'bottom-right';
+  position: 'top-left' | 'top-center' | 'top-right' | 'center-left' | 'center' | 'center-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'custom';
+  positionX: number;
+  positionY: number;
   color: 'white' | 'black' | 'orange' | 'red' | 'green' | 'sky' | 'gray' | 'maroon';
   showLogo: boolean;
+  fontSize: number;
+  fontSizeUnit: 'px' | 'percent';
+  scale?: number;
 }
 
 interface FileItem {
@@ -37,11 +43,6 @@ const SOCIAL_PLATFORMS = [
 ];
 
 const TRANSITIONS = [
-  // Basic (Switch style)
-  { value: 'cut', labelKey: 'transition_cut', icon: '✂️', type: 'basic' },
-  { value: 'fade', labelKey: 'transition_fade', icon: '👻', type: 'basic' },
-  
-  // Creative
   { value: 'slide_left', labelKey: 'transition_slide_left', icon: '⬅️', type: 'creative' },
   { value: 'slide_right', labelKey: 'transition_slide_right', icon: '➡️', type: 'creative' },
   { value: 'slide_up', labelKey: 'transition_slide_up', icon: '⬆️', type: 'creative' },
@@ -67,26 +68,70 @@ const TRANSITIONS = [
   { value: 'flip3d', labelKey: 'transition_flip3d', icon: '🃏', type: 'creative' },
 ];
 
-type FontOption = {
-  id: string;
-  labelKey: string;
-  css: string;
-  backend: string;
+const TRANSITION_EFFECT_MAP: Record<string, string> = {
+  slide_left: 'slide',
+  slide_right: 'slide',
+  slide_up: 'slide',
+  slide_down: 'slide',
+  zoom_in: 'zoom',
+  zoom_out: 'zoom',
+  wipe_left: 'curtain',
+  wipe_right: 'curtain',
+  wipe_up: 'curtain',
+  wipe_down: 'curtain',
+  pixelate: 'motionBlur',
+  ripple: 'liquid',
+  page_curl: 'curtain',
+  circle_open: 'splitScreen',
+  circle_close: 'splitScreen',
+  spin_in: 'carousel3d',
+  spin_out: 'perspective',
+  fly_in: 'parallax',
+  fly_out: 'slideScale',
+  luma_wipe: 'crossFade',
+  glitch: 'glitch',
+  cube3d: 'cube3d',
+  flip3d: 'stacked3d'
 };
 
-const FONT_OPTIONS: FontOption[] = [
-  { id: 'sans', labelKey: 'font_sans', css: "'Arial', 'Helvetica', sans-serif", backend: 'Arial' },
-  { id: 'serif', labelKey: 'font_serif', css: "'Times New Roman', 'Times', serif", backend: 'Times New Roman' },
-  { id: 'mono', labelKey: 'font_mono', css: "'Courier New', 'Courier', monospace", backend: 'Courier New' },
-  { id: 'script', labelKey: 'font_script', css: "'Comic Sans MS', 'Comic Sans', cursive", backend: 'Comic Sans MS' },
-  { id: 'display', labelKey: 'font_display', css: "'Impact', 'Haettenschweiler', sans-serif", backend: 'Impact' }
+type FontConfig = {
+  id: string;
+  label: string;
+  group: 'ka' | 'en' | 'ru';
+  css: string;
+  backend: string;
+  preview: {
+    size: number;
+    weight: number;
+    letterSpacing: number;
+    lineHeight: number;
+    textTransform?: 'uppercase' | 'none';
+  };
+};
+
+const FONTS_CONFIG: FontConfig[] = [
+  { id: 'ka_notosansgeorgian_regular', label: 'Noto Sans Georgian', group: 'ka', css: '"Noto Sans Georgian", sans-serif', backend: 'Noto Sans Georgian', preview: { size: 54, weight: 600, letterSpacing: 0.35, lineHeight: 1.12 } },
+  { id: 'ka_bpg_glaho', label: 'BPG Glaho', group: 'ka', css: '"BPG Glaho", sans-serif', backend: 'BPG Glaho', preview: { size: 54, weight: 600, letterSpacing: 0.35, lineHeight: 1.12 } },
+  { id: 'ka_sylfaen', label: 'Sylfaen', group: 'ka', css: '"Sylfaen", serif', backend: 'Sylfaen', preview: { size: 54, weight: 600, letterSpacing: 0.35, lineHeight: 1.12 } },
+  { id: 'en_inter_regular', label: 'Inter', group: 'en', css: '"Inter", sans-serif', backend: 'Inter', preview: { size: 52, weight: 600, letterSpacing: 0.25, lineHeight: 1.12 } },
+  { id: 'en_roboto_bold', label: 'Roboto Bold', group: 'en', css: '"Roboto", sans-serif', backend: 'Roboto', preview: { size: 52, weight: 700, letterSpacing: 0.2, lineHeight: 1.12 } },
+  { id: 'en_playfairdisplay_regular', label: 'Playfair Display', group: 'en', css: '"Playfair Display", serif', backend: 'Playfair Display', preview: { size: 52, weight: 600, letterSpacing: 0.2, lineHeight: 1.1 } },
+  { id: 'ru_notosans_regular', label: 'Noto Sans', group: 'ru', css: '"Noto Sans", sans-serif', backend: 'Noto Sans', preview: { size: 52, weight: 600, letterSpacing: 0.25, lineHeight: 1.12 } },
+  { id: 'ru_roboto_regular', label: 'Roboto', group: 'ru', css: '"Roboto", sans-serif', backend: 'Roboto', preview: { size: 52, weight: 600, letterSpacing: 0.2, lineHeight: 1.12 } },
+  { id: 'ru_montserrat_regular', label: 'Montserrat', group: 'ru', css: '"Montserrat", sans-serif', backend: 'Montserrat', preview: { size: 52, weight: 600, letterSpacing: 0.2, lineHeight: 1.12 } }
+];
+
+const FONT_GROUPS = [
+  { id: 'ka', label: 'ქართული' },
+  { id: 'en', label: 'English' },
+  { id: 'ru', label: 'Русский' }
 ];
 
 const TEXT_STYLE = {
-  title: { size: 60, weight: 600, letterSpacing: 0.5, lineHeight: 1.1 },
-  price: { size: 80, weight: 700, letterSpacing: 0.6, lineHeight: 1.05 },
-  phone: { size: 40, weight: 500, letterSpacing: 0.4, lineHeight: 1.1 },
-  lineGap: 12
+  title: { size: 72, weight: 600, letterSpacing: 0.4, lineHeight: 1.12 },
+  price: { size: 96, weight: 700, letterSpacing: 0.5, lineHeight: 1.06 },
+  phone: { size: 48, weight: 500, letterSpacing: 0.35, lineHeight: 1.12 },
+  lineGap: 16
 };
 
 const SAMPLE_MUSIC = Array.from({ length: 30 }, (_, i) => ({
@@ -101,11 +146,10 @@ const Generate: React.FC = () => {
   const MAX_IMAGES = 100;
   const [files, setFiles] = useState<FileItem[]>([]);
   const [draggedItem, setDraggedItem] = useState<number | null>(null);
-  const [hoveredTransition, setHoveredTransition] = useState<string | null>(null);
   const [settings, setSettings] = useState<JobSettings>({
     fps: 30,
     secondsPerImage: 3.2,
-    transition: 'fade',
+    transition: 'slide_left',
     propertyId: ''
   });
   
@@ -114,21 +158,22 @@ const Generate: React.FC = () => {
     enabled: true, // Default enabled for new layout
     text: '',
     position: 'bottom-left',
+    positionX: 50,
+    positionY: 50,
     color: 'white',
-    showLogo: false
+    showLogo: false,
+    fontSize: 100,
+    fontSizeUnit: 'percent'
   });
 
   // New state for extended settings
-  const [selectedFontId, setSelectedFontId] = useState(FONT_OPTIONS[0].id);
-  const [propertyRooms, setPropertyRooms] = useState('');
-  const [propertyArea, setPropertyArea] = useState('');
-  const [compareMode, setCompareMode] = useState(false);
-  const [compareFonts, setCompareFonts] = useState<string[]>([
-    FONT_OPTIONS[0].id,
-    FONT_OPTIONS[1].id
-  ]);
+  const [selectedFontId, setSelectedFontId] = useState(FONTS_CONFIG[0].id);
+  
   const [previewWidth, setPreviewWidth] = useState(0);
+  const [autoTranslateEnabled, setAutoTranslateEnabled] = useState(true);
+  const [translatedOverlayText, setTranslatedOverlayText] = useState('');
   const previewRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const TEXT_COLORS: { name: TextOverlay['color']; value: string }[] = [
     { name: 'white', value: '#FFFFFF' },
@@ -173,18 +218,82 @@ const Generate: React.FC = () => {
   });
   const [selectedFormats, setSelectedFormats] = useState<Record<string, string>>({
     tiktok: '9x16',
-    instagram: '1x1',
+    instagram: '4x5',
     facebook: '1x1',
-    youtube: '9x16'
+    youtube: '16x9'
   });
 
-  const selectedFont = FONT_OPTIONS.find(font => font.id === selectedFontId) ?? FONT_OPTIONS[0];
-  const previewText = textOverlay.text.trim();
+  const selectedFont = FONTS_CONFIG.find(font => font.id === selectedFontId) ?? FONTS_CONFIG[0];
+  const targetLanguage = selectedFont.group;
+  const containsGeorgian = (value: string) => /[\u10A0-\u10FF]/.test(value);
+  const resolvedOverlayText = autoTranslateEnabled && targetLanguage !== 'ka' && translatedOverlayText.trim()
+    ? translatedOverlayText
+    : textOverlay.text;
+  const previewText = resolvedOverlayText.trim();
   const hasPreviewText = previewText.length > 0;
+  const baseTitleSize = TEXT_STYLE.title.size;
+  const legacyScalePreset = Math.min(6, Math.max(1, Math.round(textOverlay.scale || 2)));
+  const LEGACY_SCALE_MAP: Record<number, number> = { 1: 0.8, 2: 1.0, 3: 1.2, 4: 1.35, 5: 1.5, 6: 1.7 };
+  const legacyScale = LEGACY_SCALE_MAP[legacyScalePreset] ?? 1;
+  const fontSizeValue = Number.isFinite(textOverlay.fontSize) ? textOverlay.fontSize : undefined;
+  const textScale = (() => {
+    if (typeof fontSizeValue === 'number') {
+      if (textOverlay.fontSizeUnit === 'px') {
+        const safePx = Math.max(8, fontSizeValue);
+        return safePx / baseTitleSize;
+      }
+      const safePercent = Math.min(300, Math.max(10, fontSizeValue));
+      return safePercent / 100;
+    }
+    return legacyScale;
+  })();
+  const formatPreviewText = (value: string) => {
+    const words = value.trim().split(/\s+/).filter(Boolean);
+    if (words.length <= 2) return value;
+    const lines = [];
+    for (let i = 0; i < words.length; i += 2) {
+      lines.push(words.slice(i, i + 2).join(' '));
+    }
+    return lines.join('\n');
+  };
+  const previewDisplayText = hasPreviewText ? formatPreviewText(previewText) : previewText;
   const previewSampleText = t('generate.font_sample_letter');
   const previewScale = previewWidth > 0 ? previewWidth / 1080 : 0.2;
   const getScaledSize = (size: number) => Math.max(8, Math.round(size * previewScale));
   const getScaledLetterSpacing = (value: number) => `${(value * previewScale).toFixed(2)}px`;
+  const previewTypography = {
+    fontFamily: selectedFont.css,
+    fontSize: `${getScaledSize(selectedFont.preview.size * textScale)}px`,
+    fontWeight: selectedFont.preview.weight,
+    lineHeight: selectedFont.preview.lineHeight,
+    letterSpacing: getScaledLetterSpacing(selectedFont.preview.letterSpacing * textScale),
+    textTransform: selectedFont.preview.textTransform ?? 'none',
+    whiteSpace: 'pre-line'
+  };
+  const transitionEffects = TRANSITIONS.map((transition) => ({
+    id: transition.value,
+    label: t(`generate.${transition.labelKey}`),
+    effectId: TRANSITION_EFFECT_MAP[transition.value] ?? 'fade'
+  }));
+
+  const translateOverlayText = useCallback(async (value: string) => {
+    if (!autoTranslateEnabled || !value.trim()) return value;
+    if (targetLanguage === 'ka') return value;
+    if (!containsGeorgian(value)) return value;
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: value, target: targetLanguage })
+      });
+      if (!res.ok) return value;
+      const data = await res.json();
+      if (typeof data?.text === 'string' && data.text.trim()) return data.text;
+      return value;
+    } catch {
+      return value;
+    }
+  }, [autoTranslateEnabled, targetLanguage]);
 
   useEffect(() => {
     if (!previewRef.current) return;
@@ -198,10 +307,21 @@ const Generate: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!compareMode) return;
-    if (compareFonts.length >= 2) return;
-    setCompareFonts([FONT_OPTIONS[0].id, FONT_OPTIONS[1].id]);
-  }, [compareMode, compareFonts.length]);
+    let active = true;
+    const value = textOverlay.text.trim();
+    if (!autoTranslateEnabled || targetLanguage === 'ka' || !value) {
+      setTranslatedOverlayText('');
+      return;
+    }
+    const timer = setTimeout(async () => {
+      const translated = await translateOverlayText(value);
+      if (active) setTranslatedOverlayText(translated);
+    }, 400);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [textOverlay.text, autoTranslateEnabled, targetLanguage, translateOverlayText]);
 
   const togglePlatform = (id: string) => {
     setEnabledPlatforms(prev => ({
@@ -350,12 +470,19 @@ const Generate: React.FC = () => {
     files.forEach(f => formData.append('images', f.file));
     formData.append('propertyId', settings.propertyId || `job_${Date.now()}`);
     
+    const overlayText = await translateOverlayText(textOverlay.text);
+
     // Add text overlay settings
     const overlayData = {
       ...textOverlay,
       fontFamily: selectedFont.backend,
       fontKey: selectedFont.id,
-      text: textOverlay.text,
+      text: overlayText,
+      textScale: textScale,
+      fontSize: textOverlay.fontSize,
+      fontSizeUnit: textOverlay.fontSizeUnit,
+      positionX: textOverlay.positionX,
+      positionY: textOverlay.positionY,
       fontSizes: {
         title: TEXT_STYLE.title.size,
         price: TEXT_STYLE.price.size,
@@ -373,8 +500,7 @@ const Generate: React.FC = () => {
       },
       lineHeight: TEXT_STYLE.title.lineHeight,
       lineGap: TEXT_STYLE.lineGap,
-      rooms: propertyRooms,
-      area: propertyArea
+      
     };
     formData.append('textOverlay', JSON.stringify(overlayData));
     
@@ -414,17 +540,27 @@ const Generate: React.FC = () => {
   };
 
     // Position mapping helper
-    const getPreviewStyle = (pos: string) => {
-      const [v, h] = pos.split('-');
+    const getPreviewStyle = (overlay: TextOverlay) => {
       const style: React.CSSProperties = { position: 'absolute', pointerEvents: 'none' };
+      if (overlay.position === 'custom') {
+        style.left = `${overlay.positionX}%`;
+        style.top = `${overlay.positionY}%`;
+        style.transform = 'translate(-50%, -50%)';
+        style.textAlign = 'center';
+        return style;
+      }
+      const [v, h] = overlay.position.split('-');
+      const transforms: string[] = [];
       
       if (v === 'top') style.top = '10%';
+      else if (v === 'center') { style.top = '50%'; transforms.push('translateY(-50%)'); }
       else style.bottom = '10%';
       
       if (h === 'left') { style.left = '5%'; style.textAlign = 'left'; }
       else if (h === 'right') { style.right = '5%'; style.textAlign = 'right'; }
-      else { style.left = '50%'; style.transform = 'translateX(-50%)'; style.textAlign = 'center'; }
+      else { style.left = '50%'; style.textAlign = 'center'; transforms.push('translateX(-50%)'); }
       
+      if (transforms.length) style.transform = transforms.join(' ');
       return style;
     };
 
@@ -451,35 +587,48 @@ const Generate: React.FC = () => {
              {/* Font Selection */}
             <div>
               <label className="text-sm font-semibold text-text-secondary mb-2 block">{t('generate.font_select_label')}</label>
-              <div className="space-y-2">
-                {FONT_OPTIONS.map(font => {
-                  const isSelected = selectedFontId === font.id;
-                  return (
-                    <button
-                      key={font.id}
-                      onClick={() => setSelectedFontId(font.id)}
-                      className={`w-full text-left border rounded-lg px-3 py-2 transition-all ${
-                        isSelected ? 'border-primary bg-primary/10' : 'border-surface-light bg-surface-dark hover:border-primary/60'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-primary' : 'bg-surface-light'}`} />
-                          <span className="text-sm font-semibold text-text-primary">{t(`generate.${font.labelKey}`)}</span>
-                        </div>
-                        <span className="text-xs text-text-secondary truncate" style={{ fontFamily: font.css }}>
-                          {previewSampleText}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
+              <div className="space-y-3">
+                {FONT_GROUPS.map(group => (
+                  <div key={group.id} className="space-y-2">
+                    <div className="text-xs font-semibold text-text-muted">{group.label}</div>
+                    {FONTS_CONFIG.filter(font => font.group === group.id).map(font => {
+                      const isSelected = selectedFontId === font.id;
+                      return (
+                        <button
+                          key={font.id}
+                          onClick={() => setSelectedFontId(font.id)}
+                          className={`w-full text-left border rounded-lg px-3 py-2 transition-all ${
+                            isSelected ? 'border-primary bg-primary/10' : 'border-surface-light bg-surface-dark hover:border-primary/60'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-primary' : 'bg-surface-light'}`} />
+                              <span className="text-sm font-semibold text-text-primary">{font.label}</span>
+                            </div>
+                            <span
+                              className="text-xs text-text-secondary truncate"
+                              style={{
+                                fontFamily: font.css,
+                                fontWeight: font.preview.weight,
+                                letterSpacing: `${font.preview.letterSpacing}px`,
+                                textTransform: font.preview.textTransform ?? 'none'
+                              }}
+                            >
+                              {previewSampleText}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
               <div className="mt-3">
                 <div className="text-xs text-text-muted mb-2">{t('generate.font_live_preview')}</div>
                 <div
                   ref={previewRef}
-                  className="relative w-full overflow-hidden rounded-lg border border-surface-light bg-surface-dark"
+                  className="relative w-full overflow-hidden rounded-lg border border-surface-light bg-surface-dark max-w-[50%]"
                   style={{ aspectRatio: '9 / 16' }}
                 >
                   {files[0]?.preview ? (
@@ -490,99 +639,18 @@ const Generate: React.FC = () => {
                   <div
                     className="absolute w-[90%] z-10"
                     style={{
-                      ...getPreviewStyle(textOverlay.position),
+                      ...getPreviewStyle(textOverlay),
                       color: TEXT_COLORS.find(c => c.name === textOverlay.color)?.value || 'white',
-                      fontFamily: selectedFont.css,
                       textShadow: textOverlay.color === 'white' ? '0 1px 3px rgba(0,0,0,0.6)' : 'none'
                     }}
                   >
                     {hasPreviewText && (
-                      <div
-                        style={{
-                          fontSize: `${getScaledSize(TEXT_STYLE.title.size)}px`,
-                          fontWeight: TEXT_STYLE.title.weight,
-                          lineHeight: TEXT_STYLE.title.lineHeight,
-                          letterSpacing: getScaledLetterSpacing(TEXT_STYLE.title.letterSpacing)
-                        }}
-                      >
-                        {previewText}
+                      <div style={previewTypography}>
+                        {previewDisplayText}
                       </div>
                     )}
                   </div>
                 </div>
-              </div>
-              <div className="mt-4 border-t border-surface-light/60 pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-semibold text-text-secondary">{t('generate.font_compare_title')}</span>
-                  <button
-                    className={`w-12 h-6 rounded-full relative transition-colors ${compareMode ? 'bg-primary' : 'bg-surface-light'}`}
-                    onClick={() => setCompareMode(!compareMode)}
-                  >
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${compareMode ? 'left-7' : 'left-1'}`} />
-                  </button>
-                </div>
-                {compareMode && (
-                  <div className="space-y-3">
-                    <div className="text-xs text-text-muted">{t('generate.font_compare_hint')}</div>
-                    <div className="space-y-2">
-                      {FONT_OPTIONS.map(font => {
-                        const isChecked = compareFonts.includes(font.id);
-                        const disableAdd = !isChecked && compareFonts.length >= 3;
-                        return (
-                          <label
-                            key={font.id}
-                            className={`flex items-center justify-between gap-3 border rounded-lg px-3 py-2 cursor-pointer ${
-                              isChecked ? 'border-primary/70 bg-primary/10' : 'border-surface-light bg-surface-dark'
-                            } ${disableAdd ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          >
-                            <input
-                              type="checkbox"
-                              className="accent-primary"
-                              checked={isChecked}
-                              disabled={disableAdd}
-                              onChange={() => {
-                                setCompareFonts(prev => {
-                                  if (prev.includes(font.id)) return prev.filter(id => id !== font.id);
-                                  if (prev.length >= 3) return prev;
-                                  return [...prev, font.id];
-                                });
-                              }}
-                            />
-                            <span className="text-sm text-text-secondary">{t(`generate.${font.labelKey}`)}</span>
-                            <span className="text-xs text-text-secondary truncate" style={{ fontFamily: font.css }}>
-                              {previewSampleText}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    {compareFonts.length >= 2 && (
-                      <div className="space-y-2">
-                        {compareFonts.map(fontId => {
-                          const font = FONT_OPTIONS.find(item => item.id === fontId);
-                          if (!font) return null;
-                          return (
-                            <div key={font.id} className="border border-surface-light rounded-lg bg-surface-dark/60 p-3">
-                              <div className="text-xs text-text-muted mb-2">{t(`generate.${font.labelKey}`)}</div>
-                              <div style={{ fontFamily: font.css, color: TEXT_COLORS.find(c => c.name === textOverlay.color)?.value || 'white' }}>
-                                <div
-                                  style={{
-                                    fontSize: `${getScaledSize(TEXT_STYLE.title.size)}px`,
-                                    fontWeight: TEXT_STYLE.title.weight,
-                                    lineHeight: TEXT_STYLE.title.lineHeight,
-                                    letterSpacing: getScaledLetterSpacing(TEXT_STYLE.title.letterSpacing)
-                                  }}
-                                >
-                                  {previewSampleText}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
 
@@ -618,74 +686,117 @@ const Generate: React.FC = () => {
                      ))}
                    </div>
                    
-                   {/* Position Control */}
-                   <div className="space-y-2">
-                      {/* Vertical */}
-                      <div className="grid grid-cols-2 gap-2 bg-surface p-1 rounded-lg">
-                        <button 
-                          className={`text-xs py-1.5 rounded-md transition-all ${textOverlay.position.startsWith('top') ? 'bg-primary text-white shadow' : 'text-text-secondary hover:bg-surface-light'}`}
-                          onClick={() => {
-                             const align = textOverlay.position.split('-')[1] || 'left';
-                             setTextOverlay({...textOverlay, position: `top-${align}` as TextOverlay['position']});
-                          }}
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-1 bg-surface p-1 rounded-lg">
+                      {[
+                        { id: 'top-left', label: '↖' },
+                        { id: 'top-center', label: '↑' },
+                        { id: 'top-right', label: '↗' },
+                        { id: 'center-left', label: '←' },
+                        { id: 'center', label: '•' },
+                        { id: 'center-right', label: '→' },
+                        { id: 'bottom-left', label: '↙' },
+                        { id: 'bottom-center', label: '↓' },
+                        { id: 'bottom-right', label: '↘' }
+                      ].map((pos) => (
+                        <button
+                          key={pos.id}
+                          className={`text-xs py-2 rounded-md transition-all ${
+                            textOverlay.position === pos.id
+                              ? 'bg-primary text-white shadow'
+                              : 'text-text-secondary hover:bg-surface-light'
+                          }`}
+                          onClick={() => setTextOverlay({ ...textOverlay, position: pos.id as TextOverlay['position'] })}
+                          title={pos.id}
                         >
-                          {t('generate.position_top')}
+                          {pos.label}
                         </button>
-                        <button 
-                          className={`text-xs py-1.5 rounded-md transition-all ${textOverlay.position.startsWith('bottom') ? 'bg-primary text-white shadow' : 'text-text-secondary hover:bg-surface-light'}`}
-                          onClick={() => {
-                             const align = textOverlay.position.split('-')[1] || 'left';
-                             setTextOverlay({...textOverlay, position: `bottom-${align}` as TextOverlay['position']});
-                          }}
-                        >
-                          {t('generate.position_bottom')}
-                        </button>
+                      ))}
+                    </div>
+                    <button
+                      className={`w-full text-xs py-2 rounded-md transition-all ${
+                        textOverlay.position === 'custom'
+                          ? 'bg-surface-light text-primary font-bold border border-primary/30'
+                          : 'bg-surface text-text-secondary hover:bg-surface-light'
+                      }`}
+                      onClick={() => setTextOverlay({ ...textOverlay, position: 'custom' })}
+                    >
+                      {t('generate.position_custom')}
+                    </button>
+                    {textOverlay.position === 'custom' && (
+                      <div className="space-y-3 bg-surface p-3 rounded-lg">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-text-secondary">{t('generate.position_x')}</span>
+                            <span className="text-xs text-text-muted">{textOverlay.positionX}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            value={textOverlay.positionX}
+                            onChange={(e) => setTextOverlay({ ...textOverlay, positionX: Number(e.target.value) })}
+                            className="w-full"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-text-secondary">{t('generate.position_y')}</span>
+                            <span className="text-xs text-text-muted">{textOverlay.positionY}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            value={textOverlay.positionY}
+                            onChange={(e) => setTextOverlay({ ...textOverlay, positionY: Number(e.target.value) })}
+                            className="w-full"
+                          />
+                        </div>
                       </div>
-
-                      {/* Horizontal */}
-                      <div className="grid grid-cols-3 gap-1 bg-surface p-1 rounded-lg">
-                        {['left', 'center', 'right'].map((align) => (
-                          <button 
-                            key={align}
-                            className={`text-xs py-1.5 rounded-md transition-all capitalize ${textOverlay.position.includes(align) ? 'bg-surface-light text-primary font-bold border border-primary/30' : 'text-text-muted hover:text-text-secondary'}`}
-                            onClick={() => {
-                               const vert = textOverlay.position.split('-')[0] || 'bottom';
-                               setTextOverlay({...textOverlay, position: `${vert}-${align}` as TextOverlay['position']});
-                            }}
-                          >
-                            {align === 'left' ? t('generate.align_left') : align === 'center' ? t('generate.align_center') : t('generate.align_right')}
-                          </button>
-                        ))}
-                      </div>
-                   </div>
+                    )}
+                  </div>
                  </div>
                </details>
              </div>
 
-             {/* Property Details - Stacked like Price/Phone */}
-             <div>
-              <label className="text-xs font-medium text-text-muted mb-1 block">{t('generate.rooms_label')}</label>
-               <input 
-                 type="text" 
-                 className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-primary placeholder-text-muted"
-                placeholder={t('generate.rooms_placeholder')}
-                 value={propertyRooms}
-                 onChange={e => setPropertyRooms(e.target.value)}
-               />
-             </div>
-             <div>
-              <label className="text-xs font-medium text-text-muted mb-1 block">{t('generate.area_label')}</label>
-               <input 
-                 type="text" 
-                 className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:border-primary placeholder-text-muted"
-                placeholder={t('generate.area_placeholder')}
-                 value={propertyArea}
-                 onChange={e => setPropertyArea(e.target.value)}
-               />
-             </div>
-
             <div>
-             <label className="text-xs font-medium text-text-muted mb-1 block">{t('generate.text_input_label')}</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-medium text-text-muted">{t('generate.font_size_label')}</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={textOverlay.fontSizeUnit === 'px' ? 12 : 10}
+                    max={textOverlay.fontSizeUnit === 'px' ? 200 : 300}
+                    value={textOverlay.fontSize}
+                    onChange={(e) => {
+                      const next = Number(e.target.value);
+                      if (Number.isNaN(next)) return;
+                      const min = textOverlay.fontSizeUnit === 'px' ? 12 : 10;
+                      const max = textOverlay.fontSizeUnit === 'px' ? 200 : 300;
+                      setTextOverlay({ ...textOverlay, fontSize: Math.min(max, Math.max(min, next)) });
+                    }}
+                    className="w-20 bg-surface-dark border border-surface-light rounded-lg px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-primary"
+                  />
+                  <select
+                    value={textOverlay.fontSizeUnit}
+                    onChange={(e) => setTextOverlay({ ...textOverlay, fontSizeUnit: e.target.value as TextOverlay['fontSizeUnit'] })}
+                    className="bg-surface-dark border border-surface-light rounded-lg px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-primary"
+                  >
+                    <option value="px">{t('generate.font_size_px')}</option>
+                    <option value="percent">{t('generate.font_size_percent')}</option>
+                  </select>
+                </div>
+              </div>
+              <input
+                type="range"
+                min={textOverlay.fontSizeUnit === 'px' ? 12 : 10}
+                max={textOverlay.fontSizeUnit === 'px' ? 200 : 300}
+                value={textOverlay.fontSize}
+                onChange={(e) => setTextOverlay({ ...textOverlay, fontSize: Number(e.target.value) })}
+                className="w-full"
+              />
+              <label className="text-xs font-medium text-text-muted mb-1 mt-3 block">{t('generate.text_input_label')}</label>
               <input 
                 type="text" 
                 className="w-full bg-surface-dark border border-surface-light rounded-lg px-3 py-2 text-text-primary placeholder-text-muted focus:outline-none focus:border-primary"
@@ -693,6 +804,16 @@ const Generate: React.FC = () => {
                 value={textOverlay.text}
                 onChange={e => setTextOverlay({...textOverlay, text: e.target.value})}
               />
+            </div>
+
+            <div className="flex items-center justify-between bg-surface-dark border border-surface-light rounded-lg px-3 py-2">
+              <span className="text-sm font-semibold text-text-primary">{t('generate.auto_translate_label')}</span>
+              <button
+                className={`w-12 h-6 rounded-full relative transition-colors ${autoTranslateEnabled ? 'bg-primary' : 'bg-surface-light'}`}
+                onClick={() => setAutoTranslateEnabled(!autoTranslateEnabled)}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${autoTranslateEnabled ? 'left-7' : 'left-1'}`} />
+              </button>
             </div>
              
              {/* Outro Section (Sareklamo Qudis Ganyofileba) */}
@@ -746,7 +867,7 @@ const Generate: React.FC = () => {
                if (e.dataTransfer.files) addFiles(Array.from(e.dataTransfer.files));
              }}
            >
-             <input type="file" multiple accept="image/*" className="hidden" id="file-upload" onChange={handleFileSelect} />
+            <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" id="file-upload" onChange={handleFileSelect} />
              <label htmlFor="file-upload" className="cursor-pointer block">
                <Upload size={48} className="mx-auto text-text-secondary mb-3" />
                <p className="text-lg font-medium text-text-primary">{t('generate.drag_drop')}</p>
@@ -756,9 +877,18 @@ const Generate: React.FC = () => {
 
            {files.length > 0 && (
              <div className="mt-6 space-y-2">
-               <p className="text-sm text-text-secondary mb-3">
-                {t('generate.images_selected_hint', { count: files.length, max: MAX_IMAGES })}
-               </p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm text-text-secondary">
+                 {t('generate.images_selected_hint', { count: files.length, max: MAX_IMAGES })}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { setFiles([]); setDraggedItem(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                  className="text-xs text-text-muted hover:text-text-primary border border-surface-light rounded-md px-2 py-1 transition-colors"
+                >
+                  გასუფთავება
+                </button>
+              </div>
                <div className="grid grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-2">
                  {files.map((file, i) => (
                    <div 
@@ -778,21 +908,13 @@ const Generate: React.FC = () => {
                        <div 
                         className="absolute w-[90%] z-10"
                          style={{ 
-                            ...getPreviewStyle(textOverlay.position),
+                            ...getPreviewStyle(textOverlay),
                             color: TEXT_COLORS.find(c => c.name === textOverlay.color)?.value || 'white',
-                           fontFamily: selectedFont.css,
                             textShadow: '1px 1px 2px rgba(0,0,0,0.8)'
                          }}
                        >
-                       <div
-                         style={{
-                           fontSize: `${getScaledSize(TEXT_STYLE.title.size)}px`,
-                           fontWeight: TEXT_STYLE.title.weight,
-                           lineHeight: TEXT_STYLE.title.lineHeight,
-                           letterSpacing: getScaledLetterSpacing(TEXT_STYLE.title.letterSpacing)
-                         }}
-                       >
-                         {previewText}
+                      <div style={previewTypography}>
+                        {previewDisplayText}
                        </div>
                        </div>
                      )}
@@ -951,134 +1073,21 @@ const Generate: React.FC = () => {
                 </label>
               </div>
               
-              {/* VISUAL PREVIEW BOX - Shows actual transition with real images */}
               <div className="mb-4 bg-surface-dark rounded-xl p-4 border border-surface-light">
                 <div className="text-xs text-text-secondary mb-2 text-center">
-                  {t('generate.transition_preview_label')} {hoveredTransition ? t(`generate.transition_${hoveredTransition}`) : t(`generate.transition_${settings.transition}`)}
+                  {t('generate.transition_preview_label')}
                 </div>
-                <div className="relative w-full h-40 bg-surface rounded-lg overflow-hidden">
-                  {/* Image 1 (Background) - Default visible */}
-                  <img 
-                    src="/preview/image1.jpg"
-                    alt="Image 1"
-                    className={`absolute inset-0 w-full h-full object-cover transition-all duration-500 ${
-                      hoveredTransition === 'fade' ? 'opacity-0' :
-                      hoveredTransition === 'slide_left' ? '-translate-x-full' :
-                      hoveredTransition === 'slide_right' ? 'translate-x-full' :
-                      hoveredTransition === 'slide_up' ? '-translate-y-full' :
-                      hoveredTransition === 'slide_down' ? 'translate-y-full' :
-                      hoveredTransition === 'zoom_in' ? 'scale-0' :
-                      hoveredTransition === 'zoom_out' ? 'scale-150 opacity-0' :
-                      hoveredTransition === 'spin_in' ? 'rotate-180 opacity-0' :
-                      hoveredTransition === 'spin_out' ? '-rotate-180 opacity-0' :
-                      hoveredTransition ? 'opacity-30' : 'opacity-100'
-                    }`}
-                    style={{ transitionTimingFunction: 'ease-in-out' }}
-                  />
-                  
-                  {/* Image 2 (Foreground) - Default hidden, slides in on hover */}
-                  <img 
-                    src="/preview/image2.jpg"
-                    alt="Image 2"
-                    className={`absolute inset-0 w-full h-full object-cover transition-all duration-500 ${
-                      hoveredTransition === 'fade' ? 'opacity-100' :
-                      hoveredTransition === 'slide_left' ? 'translate-x-0' :
-                      hoveredTransition === 'slide_right' ? 'translate-x-0' :
-                      hoveredTransition === 'slide_up' ? 'translate-y-0' :
-                      hoveredTransition === 'slide_down' ? 'translate-y-0' :
-                      hoveredTransition === 'zoom_in' ? 'scale-100' :
-                      hoveredTransition === 'zoom_out' ? 'scale-100 opacity-100' :
-                      hoveredTransition === 'spin_in' ? 'rotate-0 opacity-100' :
-                      hoveredTransition === 'spin_out' ? 'rotate-0 opacity-100' :
-                      'opacity-0'
-                    }`}
-                    style={{
-                      transform: hoveredTransition === null ? 'translateX(100%)' :
-                                hoveredTransition === 'slide_left' ? 'translateX(0)' :
-                                hoveredTransition === 'slide_right' ? 'translateX(0)' :
-                                hoveredTransition === 'slide_up' ? 'translateY(0)' :
-                                hoveredTransition === 'slide_down' ? 'translateY(0)' :
-                                hoveredTransition === 'zoom_in' ? 'scale(1)' :
-                                hoveredTransition === 'zoom_out' ? 'scale(1)' :
-                                hoveredTransition === 'fade' ? 'none' :
-                                hoveredTransition?.includes('spin') ? 'none' :
-                                'translateX(100%)',
-                      opacity: hoveredTransition === null ? '0' : undefined
-                    }}
-                  />
-                  
-                  {/* Transition Icon Overlay */}
-                  {hoveredTransition && (
-                    <div className="absolute top-2 right-2 bg-primary text-white px-2 py-1 rounded text-xs font-bold shadow-lg">
-                      {TRANSITIONS.find(t => t.value === hoveredTransition)?.icon}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Basic Switches */}
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                {TRANSITIONS.filter(t => t.type === 'basic').map((tr) => (
-                  <button
-                    key={tr.value}
-                    onClick={() => setSettings({...settings, transition: tr.value})}
-                    onMouseEnter={() => setHoveredTransition(tr.value)}
-                    onMouseLeave={() => setHoveredTransition(null)}
-                    className={`flex items-center justify-between p-3 rounded-lg border transition-all relative overflow-hidden ${
-                      settings.transition === tr.value 
-                        ? 'bg-primary border-primary text-white' 
-                        : 'bg-surface-dark border-surface-light text-text-secondary hover:border-primary'
-                    } ${hoveredTransition === tr.value ? 'ring-2 ring-primary/50' : ''}`}
-                  >
-                    {/* Hover Animation Preview */}
-                    {hoveredTransition === tr.value && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-transparent animate-pulse" />
-                    )}
-                    <span className="flex items-center relative z-10">
-                      <span className="mr-2 text-lg">{tr.icon}</span>
-                      <span className="font-medium">{t(`generate.${tr.labelKey}`)}</span>
-                    </span>
-                    <div className={`w-10 h-5 rounded-full relative transition-colors ${
-                      settings.transition === tr.value ? 'bg-white/30' : 'bg-black/20'
-                    }`}>
-                      <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${
-                        settings.transition === tr.value ? 'left-6' : 'left-1'
-                      }`} />
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              {/* Creative Grid with Hover Effects */}
-              <div className="grid grid-cols-3 xl:grid-cols-4 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                {TRANSITIONS.filter(t => t.type === 'creative').map((tr) => (
-                  <button
-                    key={tr.value}
-                    onClick={() => setSettings({...settings, transition: tr.value})}
-                    onMouseEnter={() => setHoveredTransition(tr.value)}
-                    onMouseLeave={() => setHoveredTransition(null)}
-                    className={`p-2 rounded-lg text-xs text-center transition-all border flex flex-col items-center justify-center aspect-square relative overflow-hidden ${
-                      settings.transition === tr.value 
-                        ? 'bg-primary border-primary text-white' 
-                        : 'bg-surface-dark border-surface-light text-text-secondary hover:border-primary'
-                    } ${hoveredTransition === tr.value ? 'scale-105 shadow-lg' : ''}`}
-                  >
-                    {/* Hover Glow Effect */}
-                    {hoveredTransition === tr.value && (
-                      <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-transparent to-primary/10 animate-pulse" />
-                    )}
-                    <span className={`block text-2xl mb-1 relative z-10 transition-transform ${hoveredTransition === tr.value ? 'scale-110' : ''}`}>
-                      {tr.icon}
-                    </span>
-                    <span className="line-clamp-2 leading-tight relative z-10 font-medium">
-                      {t(`generate.${tr.labelKey}`)}
-                    </span>
-                    {/* Preview indicator on hover */}
-                    {hoveredTransition === tr.value && (
-                      <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-8 h-1 bg-primary rounded-full" />
-                    )}
-                  </button>
-                ))}
+                <ModernSlider
+                  className="w-full"
+                  effects={transitionEffects}
+                  previewImages={[
+                    { id: 'preview-1', src: '/preview/image1.jpg', alt: 'Preview 1' },
+                    { id: 'preview-2', src: '/preview/image2.jpg', alt: 'Preview 2' }
+                  ]}
+                  selectedId={settings.transition}
+                  selectedEffectId={TRANSITION_EFFECT_MAP[settings.transition] ?? 'fade'}
+                  onSelectEffect={(effectId) => setSettings({ ...settings, transition: effectId })}
+                />
               </div>
               
               {/* Selected Transition Info */}

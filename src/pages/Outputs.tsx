@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Download, Archive, Youtube, Instagram, Facebook, Video, Film } from 'lucide-react';
+import { Download, Archive, Youtube, Instagram, Facebook, Video, Film, Trash2 } from 'lucide-react';
 import { useLanguage } from '../i18n/useLanguage';
 
 interface Job {
@@ -52,6 +52,24 @@ const Outputs: React.FC = () => {
       console.error(e);
     }
   }, []);
+
+  const handleDeleteFile = useCallback(async (file: string) => {
+    if (!selectedJobId) return;
+    try {
+      await fetch(`/api/jobs/${selectedJobId}/files/${encodeURIComponent(file)}`, { method: 'DELETE' });
+      setSelectedJobDetails((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          files: (current.files || []).filter(item => item !== file),
+          zipFile: undefined
+        };
+      });
+      fetchJobs();
+    } catch (e) {
+      console.error(e);
+    }
+  }, [selectedJobId, fetchJobs]);
 
   useEffect(() => {
     if (selectedJobId) {
@@ -181,7 +199,14 @@ const Outputs: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 h-full">
                 {selectedJobDetails.files.map((file: string) => (
                   <div key={file} className="bg-[#1F2937] border border-[#374151] rounded-lg p-4 flex flex-col h-[400px] relative overflow-hidden group">
-                    {/* Top: Logo & Label */}
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteFile(file)}
+                      className="absolute top-3 right-3 z-20 bg-black/60 hover:bg-black/80 text-white rounded-full p-1.5"
+                      aria-label={t('outputs.btn_delete')}
+                    >
+                      <Trash2 size={14} />
+                    </button>
                     <div className="flex justify-center items-start z-10 mb-4 bg-[#111827] p-2 rounded-lg w-full">
                         {getIconForFile(file)}
                     </div>

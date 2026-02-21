@@ -3,6 +3,8 @@ import type { Request } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import http from 'http';
+import https from 'https';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import archiver from 'archiver';
 import { v4 as uuidv4 } from 'uuid';
@@ -58,16 +60,21 @@ type TextOverlay = {
   price?: string;
   phone?: string;
   position?: string;
+  positionX?: number;
+  positionY?: number;
   color?: string;
   showLogo?: boolean;
   font?: string;
   fontFamily?: string;
   fontKey?: string;
+  fontSize?: number;
+  fontSizeUnit?: 'px' | 'percent';
   fontSizes?: {
     title?: number;
     price?: number;
     phone?: number;
   };
+  textScale?: number;
   fontWeights?: {
     title?: number;
     price?: number;
@@ -320,7 +327,161 @@ function createZip(sourceDir: string, files: string[], outPath: string): Promise
     });
 }
 
+const detectSourceLanguage = (text: string) => {
+    if (/[ᄀ-ᇿ\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]/.test(text)) return 'ko';
+    if (/[\u10A0-\u10FF]/.test(text)) return 'ka';
+    if (/[\u0400-\u04FF]/.test(text)) return 'ru';
+    return 'en';
+};
+
+const translateWithLibre = async (text: string, target: string) => {
+    const endpoints = [
+        process.env.LIBRETRANSLATE_URL,
+        'https://libretranslate.com/translate',
+        'https://libretranslate.de/translate'
+    ].filter(Boolean) as string[];
+    const payload = { q: text, source: 'auto', target, format: 'text' };
+
+    for (const endpoint of endpoints) {
+        if (typeof fetch === 'function') {
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) continue;
+                const data = await response.json();
+                const translated = typeof data?.translatedText === 'string' ? data.translatedText : null;
+                if (translated) return translated;
+            } catch {
+                continue;
+            }
+        }
+
+        const result = await new Promise<string | null>((resolve) => {
+            try {
+                const url = new URL(endpoint);
+                const data = JSON.stringify(payload);
+                const client = url.protocol === 'http:' ? http : https;
+                const req = client.request(
+                    {
+                        hostname: url.hostname,
+                        port: url.port || (url.protocol === 'http:' ? 80 : 443),
+                        path: url.pathname + url.search,
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Content-Length': Buffer.byteLength(data)
+                        }
+                    },
+                    (resp) => {
+                        let body = '';
+                        resp.on('data', (chunk) => {
+                            body += chunk.toString();
+                        });
+                        resp.on('end', () => {
+                            if (!resp.statusCode || resp.statusCode < 200 || resp.statusCode >= 300) {
+                                resolve(null);
+                                return;
+                            }
+                            try {
+                                const parsed = JSON.parse(body);
+                                resolve(typeof parsed?.translatedText === 'string' ? parsed.translatedText : null);
+                            } catch {
+                                resolve(null);
+                            }
+                        });
+                    }
+                );
+                req.on('error', () => resolve(null));
+                req.write(data);
+                req.end();
+            } catch {
+                resolve(null);
+            }
+        });
+        if (result) return result;
+    }
+
+    return null;
+};
+
+const translateWithMyMemory = async (text: string, target: string) => {
+    const source = detectSourceLanguage(text);
+    const endpoint = 'https://api.mymemory.translated.net/get';
+    const params = new URLSearchParams({
+        q: text,
+        langpair: `${source}|${target}`
+    });
+    const url = `${endpoint}?${params.toString()}`;
+
+    if (typeof fetch === 'function') {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) return null;
+            const data = await response.json();
+            const translated = data?.responseData?.translatedText;
+            return typeof translated === 'string' && translated.trim() ? translated : null;
+        } catch {
+            return null;
+        }
+    }
+
+    return new Promise<string | null>((resolve) => {
+        try {
+            const parsedUrl = new URL(url);
+            const client = parsedUrl.protocol === 'http:' ? http : https;
+            const req = client.request(
+                {
+                    hostname: parsedUrl.hostname,
+                    port: parsedUrl.port || (parsedUrl.protocol === 'http:' ? 80 : 443),
+                    path: parsedUrl.pathname + parsedUrl.search,
+                    method: 'GET'
+                },
+                (resp) => {
+                    let body = '';
+                    resp.on('data', (chunk) => {
+                        body += chunk.toString();
+                    });
+                    resp.on('end', () => {
+                        if (!resp.statusCode || resp.statusCode < 200 || resp.statusCode >= 300) {
+                            resolve(null);
+                            return;
+                        }
+                        try {
+                            const data = JSON.parse(body);
+                            const translated = data?.responseData?.translatedText;
+                            resolve(typeof translated === 'string' && translated.trim() ? translated : null);
+                        } catch {
+                            resolve(null);
+                        }
+                    });
+                }
+            );
+            req.on('error', () => resolve(null));
+            req.end();
+        } catch {
+            resolve(null);
+        }
+    });
+};
+
 // Routes
+
+app.post('/api/translate', async (req, res) => {
+    const text = typeof req.body?.text === 'string' ? req.body.text : '';
+    const target = typeof req.body?.target === 'string' ? req.body.target : '';
+    if (!text.trim()) return res.json({ text: '' });
+    if (target === 'ka' || !target) return res.json({ text });
+    if (!['en', 'ru', 'ka'].includes(target)) return res.status(400).json({ error: 'Invalid target' });
+
+    const translated = await translateWithLibre(text, target);
+    if (translated) return res.json({ text: translated });
+
+    const fallback = await translateWithMyMemory(text, target);
+    return res.json({ text: fallback ?? text });
+});
 
 // 1. Create Job
 app.post('/api/generate', (req, res, next) => {
@@ -337,10 +498,20 @@ app.post('/api/generate', (req, res, next) => {
         const rawText = typeof textOverlay.text === 'string' ? textOverlay.text : '';
         const sanitizedText = rawText.replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
         const limitedText = sanitizedText.length > 200 ? sanitizedText.slice(0, 200) : sanitizedText;
+        const clampNumber = (value: unknown, fallback: number, min: number, max: number) => {
+            const num = typeof value === 'number' ? value : Number(value);
+            if (Number.isNaN(num)) return fallback;
+            return Math.min(max, Math.max(min, num));
+        };
+        const normalizedFontSizeUnit = textOverlay.fontSizeUnit === 'px' ? 'px' : 'percent';
         const normalizedTextOverlay: TextOverlay = {
             ...textOverlay,
             text: limitedText,
-            enabled: limitedText.length > 0 ? (textOverlay.enabled ?? true) : false
+            enabled: limitedText.length > 0 ? (textOverlay.enabled ?? true) : false,
+            positionX: clampNumber(textOverlay.positionX, 50, 0, 100),
+            positionY: clampNumber(textOverlay.positionY, 50, 0, 100),
+            fontSize: clampNumber(textOverlay.fontSize, 100, 10, 300),
+            fontSizeUnit: normalizedFontSizeUnit
         };
         if (rawText && rawText !== limitedText) {
             console.log(`[TextOverlay] text trimmed or limited: ${rawText.length} -> ${limitedText.length}`);
@@ -408,7 +579,29 @@ app.get('/api/jobs/:id/download/:filename', (req, res) => {
     res.download(filePath);
 });
 
-// 4. Cancel Job
+// 4. Delete Output File
+app.delete('/api/jobs/:id/files/:filename', (req, res) => {
+    const job = jobs[req.params.id];
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+
+    const filename = req.params.filename;
+    const isValid = job.files && job.files.includes(filename);
+    if (!isValid) return res.status(403).json({ error: 'Access denied' });
+
+    const filePath = path.join(job.outputDir, filename);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+    job.files = job.files?.filter(file => file !== filename);
+
+    if (job.zipFile && fs.existsSync(job.zipFile)) {
+        fs.unlinkSync(job.zipFile);
+    }
+    job.zipFile = undefined;
+
+    res.json({ status: 'deleted', files: job.files, zipFile: job.zipFile });
+});
+
+// 5. Cancel Job
 app.post('/api/jobs/:id/cancel', (req, res) => {
     const job = jobs[req.params.id];
     if (!job) return res.status(404).json({ error: 'Job not found' });
@@ -427,7 +620,7 @@ app.post('/api/jobs/:id/cancel', (req, res) => {
     res.json({ status: 'canceled' });
 });
 
-// 5. List Jobs (Outputs Page)
+// 6. List Jobs (Outputs Page)
 app.get('/api/jobs', (req, res) => {
     // Return list of jobs sorted by date desc
     const list = Object.values(jobs)

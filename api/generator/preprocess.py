@@ -1,11 +1,12 @@
 import os
-from PIL import Image, ImageFilter
+from concurrent.futures import ThreadPoolExecutor
+from PIL import Image
 
 def preprocess_image(image_path, output_dir, target_width, target_height):
     """
     Preprocess a single image:
     - No cropping allowed (contain mode).
-    - Background: same image, cover mode, blurred + slightly darkened.
+    - Background: same image, cover mode.
     - Upscale maximum 2x only.
     - Save to output_dir.
     """
@@ -18,29 +19,15 @@ def preprocess_image(image_path, output_dir, target_width, target_height):
         target_ratio = target_width / target_height
         img_ratio = img_w / img_h
 
-        # 1. Background - Black
-        bg = Image.new("RGB", (target_width, target_height), (0, 0, 0))
+        # 1. Background - Cover (no blur)
+        bg_scale = max(target_width / img_w, target_height / img_h)
+        bg_w = int(img_w * bg_scale)
+        bg_h = int(img_h * bg_scale)
+        bg = img.resize((bg_w, bg_h), Image.Resampling.LANCZOS)
+        left = max(0, (bg_w - target_width) // 2)
+        top = max(0, (bg_h - target_height) // 2)
+        bg = bg.crop((left, top, left + target_width, top + target_height))
 
-        # 2. Create Foreground (Contain)
-        # Calculate max dimensions
-        scale = min(target_width / img_w, target_height / img_h)
-        
-        # "Upscale maximum 2x only"
-        if scale > 2.0:
-            scale = 2.0
-            
-        fg_w = int(img_w * scale)
-        fg_h = int(img_h * scale)
-        
-        fg = img.resize((fg_w, fg_h), Image.Resampling.LANCZOS)
-
-        # 3. Composite
-        # Paste fg onto bg (centered)
-        paste_x = (target_width - fg_w) // 2
-        paste_y = (target_height - fg_h) // 2
-        
-        bg.paste(fg, (paste_x, paste_y))
-        
         bg.save(output_path, quality=95)
         return output_path
 
@@ -49,7 +36,9 @@ def preprocess_image(image_path, output_dir, target_width, target_height):
         raise
 
 def preprocess_images(image_paths, temp_dir, width, height):
-    processed_paths = []
-    for p in image_paths:
-        processed_paths.append(preprocess_image(p, temp_dir, width, height))
-    return processed_paths
+    if not image_paths:
+        return []
+    max_workers = min(len(image_paths), max(1, os.cpu_count() or 1))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(preprocess_image, p, temp_dir, width, height) for p in image_paths]
+        return [future.result() for future in futures]
